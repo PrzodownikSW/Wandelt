@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
+project(Wandelt LANGUAGES CXX)
+
+file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS Wandelt/*.cpp Wandelt/*.hpp)
+
+add_executable(${PROJECT_NAME} ${GAME_SOURCES} ${GAME_ASSETS})
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "" FILES ${GAME_SOURCES})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+wdt_target_pch(${PROJECT_NAME} pch.hpp ${CMAKE_CURRENT_SOURCE_DIR}/Wandelt/pch.cpp)
