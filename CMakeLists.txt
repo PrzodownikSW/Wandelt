@@ -32,7 +32,11 @@ set(CMAKE_STATIC_LINKER_FLAGS_DIST "${CMAKE_STATIC_LINKER_FLAGS_RELEASE}")
 if(MSVC)
     # Strip MSVC's default /EHsc before adding /EHs-c- to avoid D9025 override warnings
     string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    # C4061/C4062 are enum-switch exhaustiveness warnings that stay off even under /W4.
+    # Enable them explicitly so newly added TokenType values don't get missed silently.
     add_compile_options(/W4 /GR- /EHs-c- /Zc:preprocessor /utf-8 /wd4251)
+    add_compile_options(/w44061 /w44062)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     add_definitions(-D_HAS_EXCEPTIONS=0)
 
     # Debug: no optimization, full symbols
@@ -46,7 +50,9 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_DIST "/O2 /GL" CACHE STRING "" FORCE)
     set(CMAKE_EXE_LINKER_FLAGS_DIST "/LTCG /OPT:REF /OPT:ICF" CACHE STRING "" FORCE)
 else()
+    # -Wswitch-enum keeps warning on missing enum cases even when a default: branch exists.
     add_compile_options(-Wall -Wextra -Wpedantic -fno-exceptions -fno-rtti)
+    add_compile_options(-Wswitch-enum)
 
     # Debug: no optimization, full symbols
     set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g" CACHE STRING "" FORCE)
@@ -64,6 +70,10 @@ add_compile_definitions(
     $<$<CONFIG:Dist>:WDT_CONFIG_DIST>
 )
 
+set(DEMO_PATH ${CMAKE_CURRENT_SOURCE_DIR}/demo/)
+add_compile_definitions(DEMO_PATH="${DEMO_PATH}")
+message(STATUS "Demos path: ${DEMO_PATH}")
+
 # Manual PCH setup — avoids CMake's generated cmake_pch files polluting the VS solution tree
 # wdt_target_pch: creates and uses PCH (for targets with pch.cpp)
 function(wdt_target_pch target pch_header pch_source)
@@ -71,7 +81,8 @@ function(wdt_target_pch target pch_header pch_source)
         target_compile_options(${target} PRIVATE /Yu${pch_header} /FI${pch_header})
         set_source_files_properties(${pch_source} TARGET_DIRECTORY ${target} PROPERTIES COMPILE_FLAGS /Yc${pch_header})
     else()
-        target_compile_options(${target} PRIVATE -include ${pch_header})
+        get_filename_component(_pch_dir "${pch_source}" DIRECTORY)
+        target_compile_options(${target} PRIVATE -include ${_pch_dir}/${pch_header})
     endif()
 endfunction()
 

@@ -1,0 +1,18 @@
+package example #entrypoint;
+
+// some comment
+
+<*
+	multiline
+	comment
+	<*
+		inner
+		comment
+	*>
+*>
+fn int main()
+{
+	return 12;
+}
+
+return main();
