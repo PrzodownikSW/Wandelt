@@ -1,5 +1,7 @@
 #include "Memory.hpp"
 
+#include <cstring>
+
 namespace Wandelt
 {
 

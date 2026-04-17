@@ -18,6 +18,9 @@ namespace Wandelt::Platform
 
 #else
 
+	#include <sys/ioctl.h>
+	#include <unistd.h>
+
 	int GetTerminalWidth(void)
 	{
 		struct winsize w;

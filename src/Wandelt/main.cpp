@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "Wandelt/Defines.hpp"
 #include "Wandelt/Diagnostics.hpp"
 #include "Wandelt/File.hpp"

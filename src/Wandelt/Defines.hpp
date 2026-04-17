@@ -1,19 +1,18 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 
 // Unsigned int types.
-using u8  = std::uint8_t;
-using u16 = std::uint16_t;
-using u32 = std::uint32_t;
-using u64 = std::uint64_t;
+using u8  = unsigned char;
+using u16 = unsigned short;
+using u32 = unsigned int;
+using u64 = unsigned long long;
 
 // Signed int types.
-using i8  = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
+using i8  = signed char;
+using i16 = signed short;
+using i32 = signed int;
+using i64 = signed long long;
 
 // Floating point types
 using f32 = float;
@@ -208,7 +207,7 @@ namespace Wandelt
 
 #define DEFER_ACTUALLY_JOIN(x, y) x##y
 #define DEFER_JOIN(x, y)          DEFER_ACTUALLY_JOIN(x, y)
-#define DEFER_UNIQUE_VARNAME(x)   DEFER_JOIN(x, __COUNTER__)
+#define DEFER_UNIQUE_VARNAME(x)   DEFER_JOIN(x, __LINE__)
 #define defer(expr)               [[maybe_unused]] auto DEFER_UNIQUE_VARNAME(defer_object) = Wandelt::DeferFunction([&]() { expr; })
 
 } // namespace Wandelt

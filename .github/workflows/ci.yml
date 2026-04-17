@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.config }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        config: [Debug, Release, Dist]
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Clang 22 + Ninja + CMake (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget lsb-release gnupg ninja-build cmake
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22
+          sudo apt-get install -y libc++-22-dev libc++abi-22-dev
+          rm llvm.sh
+          clang++-22 --version
+          ninja --version
+          cmake --version
+
+      - name: Configure (Windows / MSVC)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Configure (Linux / Clang)
+        if: runner.os == 'Linux'
+        env:
+          CC: clang-22
+          CXX: clang++-22
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+
+      - name: Build
+        run: |
+          set -o pipefail
+          cmake --build build --config ${{ matrix.config }} 2>&1 | tee build.log
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          set -o pipefail
+          ./bin/${{ matrix.config }}/Wandelt.exe -test 2>&1 | tee test.log
+
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          ./bin/Wandelt -test 2>&1 | tee test.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            build.log
+            test.log
+          retention-days: 30
+          if-no-files-found: warn
