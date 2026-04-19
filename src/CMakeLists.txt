@@ -10,6 +10,10 @@ file(GLOB DEMO_FILES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/demo/*
 )
 
+file(GLOB DOCS_FILES CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/docs/*
+)
+
 file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/tests/Wandelt/*.cpp
     ${CMAKE_SOURCE_DIR}/tests/Wandelt/*.hpp
@@ -17,9 +21,10 @@ file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
 
 source_group("src" FILES ${SOURCES})
 source_group("demo" FILES ${DEMO_FILES})
+source_group("docs" FILES ${DOCS_FILES})
 source_group("tests" FILES ${TEST_FILES})
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${DEMO_FILES} ${TEST_FILES})
+add_executable(${PROJECT_NAME} ${SOURCES} ${DEMO_FILES} ${TEST_FILES} ${DOCS_FILES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tests)

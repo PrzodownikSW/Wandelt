@@ -26,16 +26,6 @@ namespace Wandelt
 		std::free(ptr);
 	}
 
-	HeapAllocator GetHeapAllocator()
-	{
-		return HeapAllocator();
-	}
-
-	ArenaAllocator GetArenaAllocator(Allocator* baseAllocator, u64 arenaSize)
-	{
-		return ArenaAllocator(baseAllocator, arenaSize);
-	}
-
 	ArenaAllocator::ArenaAllocator(Allocator* baseAllocator, u64 arenaSize) : m_BaseAllocator(baseAllocator), m_Size(arenaSize)
 	{
 		ASSERT(baseAllocator != nullptr, "Allocator is nullptr!");
@@ -85,6 +75,49 @@ namespace Wandelt
 
 	void ArenaAllocator::Reset()
 	{
+		m_Used        = 0;
+		m_Allocations = 0;
+	}
+
+	VirtualMemoryAllocator::VirtualMemoryAllocator(u64 reservedSize) : m_Memory(reservedSize)
+	{
+		ASSERT(reservedSize > 0, "Cannot create allocator with %llu size!", reservedSize);
+		ASSERT(reservedSize % 16 == 0, "Allocator size must be a multiple of 16 bytes!");
+	}
+
+	void* VirtualMemoryAllocator::Alloc(u64 size)
+	{
+		ASSERT(size > 0, "Cannot allocate 0 bytes!");
+
+		size = (size + 15u) & ~(u64)15;
+
+		void* memory = m_Memory.Allocate(size);
+		m_Used += size;
+		m_Allocations++;
+
+		return memory;
+	}
+
+	void* VirtualMemoryAllocator::Realloc(void* ptr, u64 oldSize, u64 newSize)
+	{
+		ASSERT(ptr != nullptr, "Cannot reallocate nullptr!");
+		ASSERT(oldSize > 0, "Old size must be greater than 0!");
+		ASSERT(newSize > 0, "New size must be greater than 0!");
+		ASSERT(newSize >= oldSize, "Virtual memory allocator does not support shrinking reallocations!");
+
+		void* newMemory = Alloc(newSize);
+		std::memcpy(newMemory, ptr, oldSize);
+		return newMemory;
+	}
+
+	void VirtualMemoryAllocator::Free(void* /*ptr*/, u64 /*size*/)
+	{
+		// Virtual memory allocator does not support freeing individual allocations.
+	}
+
+	void VirtualMemoryAllocator::Reset()
+	{
+		m_Memory.Reset();
 		m_Used        = 0;
 		m_Allocations = 0;
 	}

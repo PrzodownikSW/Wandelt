@@ -74,6 +74,12 @@ namespace Wandelt
 		return FileLocation{.row = row, .col = col};
 	}
 
+	StringView File::GetViewOverPartOfContent(u32 offset, u32 length) const
+	{
+		ASSERT(offset + length <= m_Content.Length(), "Requested content part is out of bounds of the file content");
+		return StringView{m_Content.Data() + offset, length};
+	}
+
 	bool FileExists(const String& path)
 	{
 		return fs::exists(path.Data());

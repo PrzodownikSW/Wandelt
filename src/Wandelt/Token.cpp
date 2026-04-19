@@ -20,6 +20,9 @@ namespace Wandelt
 		case TOKEN_TYPE_AS_KEYWORD:
 			return "as";
 
+		case TOKEN_TYPE_FN_KEYWORD:
+			return "fn";
+
 		case TOKEN_TYPE_ENTRYPOINT_DIRECTIVE:
 			return "#entrypoint";
 

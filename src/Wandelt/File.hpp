@@ -41,6 +41,8 @@ namespace Wandelt
 		const String& Name() const { return m_Name; }
 		const String& Content() const { return m_Content; }
 
+		StringView GetViewOverPartOfContent(u32 offset, u32 length) const;
+
 	private:
 		Allocator* m_Allocator = nullptr;
 		String m_Path;    // Path to the file (relative to the project root)

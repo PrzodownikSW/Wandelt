@@ -195,6 +195,8 @@ namespace Wandelt
 			break;
 
 		case 'f':
+			if (ident == "fn")
+				return CreateNewToken(TOKEN_TYPE_FN_KEYWORD);
 			if (ident == "float")
 				return CreateNewToken(TOKEN_TYPE_FLOAT_KEYWORD);
 			if (ident == "false")

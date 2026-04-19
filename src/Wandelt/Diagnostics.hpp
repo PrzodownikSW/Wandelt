@@ -61,6 +61,7 @@ namespace Wandelt
 		bool HasWarnings() const { return m_WarningCount > 0; }
 		u32 ErrorCount() const { return m_ErrorCount; }
 		u32 WarningCount() const { return m_WarningCount; }
+		void SetUseColor(bool useColor) { m_UseColor = useColor; }
 		void Reset();
 
 		void EnableCapture();
@@ -88,6 +89,7 @@ namespace Wandelt
 
 		u32 m_ErrorCount      = 0;
 		u32 m_WarningCount    = 0;
+		bool m_UseColor       = true;
 		bool m_CaptureEnabled = false;
 		Entry m_Captured[MaxCaptured]{};
 		u32 m_CapturedCount = 0;

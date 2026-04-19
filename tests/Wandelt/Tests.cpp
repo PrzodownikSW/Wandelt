@@ -3,13 +3,15 @@
 #include "Wandelt/ScopedTimer.hpp"
 
 #include "LexerTests.hpp"
+#include "ParserTests.hpp"
 
 namespace Wandelt
 {
 
-	int RunTests(const char* filter)
+	int RunTests(const char* filter, bool useColors)
 	{
 		SetTestFilter(filter);
+		SetTestUseColor(useColors);
 
 		ScopedTimer timer;
 
@@ -27,27 +29,37 @@ namespace Wandelt
 		if (r.failed > 0)
 			suitesFailed++;
 
+		r = RunParserTests();
+		totalRun += r.run;
+		totalPassed += r.passed;
+		totalFailed += r.failed;
+		suitesRun++;
+		if (r.failed > 0)
+			suitesFailed++;
+
 		f64 grand_ms = timer.GetElapsedMilliseconds();
 
 		printf("\n");
 		if (totalRun == 0 && filter && filter[0] != '\0')
 		{
-			printf(ANSI_COLOR_YELLOW ANSI_COLOR_BOLD "No tests matched filter '%s'" ANSI_COLOR_RESET "\n", filter);
+			printf("%s%sNo tests matched filter '%s'%s\n", TestColor(ANSI_COLOR_YELLOW), TestColor(ANSI_COLOR_BOLD), filter,
+			       TestColor(ANSI_COLOR_RESET));
 			return 1;
 		}
 
 		if (totalFailed == 0)
 		{
-			printf(ANSI_COLOR_GREEN ANSI_COLOR_BOLD "All %d tests passed" ANSI_COLOR_RESET ANSI_COLOR_DIM
-			                                        "  (%d suite%s, %.2fms total)" ANSI_COLOR_RESET "\n",
-			       totalRun, suitesRun, suitesRun == 1 ? "" : "s", grand_ms);
+			printf("%s%sAll %d tests passed%s%s  (%d suite%s, %.2fms total)%s\n", TestColor(ANSI_COLOR_GREEN), TestColor(ANSI_COLOR_BOLD), totalRun,
+			       TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), suitesRun, suitesRun == 1 ? "" : "s", grand_ms,
+			       TestColor(ANSI_COLOR_RESET));
 		}
 		else
 		{
-			printf(ANSI_COLOR_RED ANSI_COLOR_BOLD "%d of %d tests failed" ANSI_COLOR_RESET ANSI_COLOR_DIM
-			                                      "  (%d/%d suites failed, %.2fms total)" ANSI_COLOR_RESET "\n",
-			       totalFailed, totalRun, suitesFailed, suitesRun, grand_ms);
-			printf(ANSI_COLOR_GREEN "%d passed" ANSI_COLOR_RESET ", " ANSI_COLOR_RED "%d failed" ANSI_COLOR_RESET "\n", totalPassed, totalFailed);
+			printf("%s%s%d of %d tests failed%s%s  (%d/%d suites failed, %.2fms total)%s\n", TestColor(ANSI_COLOR_RED), TestColor(ANSI_COLOR_BOLD),
+			       totalFailed, totalRun, TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), suitesFailed, suitesRun, grand_ms,
+			       TestColor(ANSI_COLOR_RESET));
+			printf("%s%d passed%s, %s%d failed%s\n", TestColor(ANSI_COLOR_GREEN), totalPassed, TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_RED),
+			       totalFailed, TestColor(ANSI_COLOR_RESET));
 		}
 
 		return totalFailed > 0 ? 1 : 0;

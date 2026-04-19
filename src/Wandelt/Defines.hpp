@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 
 // Unsigned int types.
 using u8  = unsigned char;
@@ -34,6 +36,13 @@ static_assert(sizeof(i64) == 8, "i64 must be 8 bytes");
 
 static_assert(sizeof(f32) == 4, "f32 must be 4 bytes");
 static_assert(sizeof(f64) == 8, "f64 must be 8 bytes");
+
+namespace Wandelt::Platform
+{
+
+	bool IsDebuggerPresent();
+
+}
 
 #define BIT(x) (1ULL << (x))
 
@@ -111,6 +120,19 @@ static_assert(false, "Unsupported compiler!");
 #else
 static_assert(false, "Unsupported compiler!");
 #endif
+
+namespace Wandelt
+{
+
+	[[noreturn]] INLINE void HandleAssertionFailure()
+	{
+		if (Platform::IsDebuggerPresent())
+			DEBUG_BREAK();
+
+		std::exit(-1);
+	}
+
+} // namespace Wandelt
 
 INLINE constexpr u64 Kilobytes(u64 x)
 {
@@ -235,7 +257,8 @@ static_assert(false, "Unsupported compiler!");
 			                           "erroneous source code and this error message, to help to diagnose\n" \
 			                           "and fix the issue.\n" ANSI_COLOR_RESET,                              \
 			        #condition, __FILE__, __LINE__);                                                         \
-			abort();                                                                                         \
+			fflush(stderr);                                                                                  \
+			Wandelt::HandleAssertionFailure();                                                               \
 		}                                                                                                    \
 	} while (0)
 
@@ -256,7 +279,8 @@ static_assert(false, "Unsupported compiler!");
 			                "Please consider filing an issue on GitHub, including the possibly\n" \
 			                "erroneous source code and this error message, to help to diagnose\n" \
 			                "and fix the issue.\n" ANSI_COLOR_RESET);                             \
-			abort();                                                                              \
+			fflush(stderr);                                                                       \
+			Wandelt::HandleAssertionFailure();                                                    \
 		}                                                                                         \
 	} while (0)
 

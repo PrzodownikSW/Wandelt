@@ -15,11 +15,17 @@ namespace Wandelt
 		StringView() = default;
 		StringView(const char* data, u64 len) : m_Data(data), m_Len(len) {}
 
+		template <u64 N>
+		constexpr StringView(const char (&literal)[N]) : m_Data(literal), m_Len(N - 1) // Allow StringView x = "literal";
+		{
+		}
+
 		static StringView FromCStr(const char* str);
 
 		const char* Data() const { return m_Data; }
 		u64 Length() const { return m_Len; }
 
+		operator bool() const { return m_Data != nullptr && m_Len > 0; }
 		operator std::string_view() const { return {m_Data, m_Len}; }
 		bool operator==(std::string_view other) const;
 

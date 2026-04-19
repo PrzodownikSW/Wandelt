@@ -65,7 +65,7 @@ namespace Wandelt
 
 	void Diagnostics::PrintAtLocation(Span span, const File* file, std::string_view message, Severity severity)
 	{
-		std::string formatted = FormatAtLocation(span, file, message, severity, Platform::GetTerminalWidth(), true);
+		std::string formatted = FormatAtLocation(span, file, message, severity, Platform::GetTerminalWidth(), m_UseColor);
 		fputs(formatted.c_str(), stdout);
 	}
 

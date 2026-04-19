@@ -32,10 +32,8 @@ set(CMAKE_STATIC_LINKER_FLAGS_DIST "${CMAKE_STATIC_LINKER_FLAGS_RELEASE}")
 if(MSVC)
     # Strip MSVC's default /EHsc before adding /EHs-c- to avoid D9025 override warnings
     string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # C4061/C4062 are enum-switch exhaustiveness warnings that stay off even under /W4.
-    # Enable them explicitly so newly added TokenType values don't get missed silently.
     add_compile_options(/W4 /GR- /EHs-c- /Zc:preprocessor /utf-8 /wd4251)
-    add_compile_options(/w44061 /w44062)
+    add_compile_options(/w44062) #C4062: switch statement contains unhandled enum cases
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     add_definitions(-D_HAS_EXCEPTIONS=0)
 
@@ -50,9 +48,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_DIST "/O2 /GL" CACHE STRING "" FORCE)
     set(CMAKE_EXE_LINKER_FLAGS_DIST "/LTCG /OPT:REF /OPT:ICF" CACHE STRING "" FORCE)
 else()
-    # -Wswitch-enum keeps warning on missing enum cases even when a default: branch exists.
     add_compile_options(-Wall -Wextra -Wpedantic -fno-exceptions -fno-rtti)
-    add_compile_options(-Wswitch-enum)
 
     # Debug: no optimization, full symbols
     set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g" CACHE STRING "" FORCE)

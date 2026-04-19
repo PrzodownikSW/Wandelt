@@ -29,6 +29,7 @@ namespace Wandelt
 	inline int g_TestsPassed              = 0;
 	inline int g_TestsFailed              = 0;
 	inline AssertionFailure g_LastFailure = {};
+	inline bool g_TestUseColor            = true;
 
 	inline char g_TestFilter[128]   = "";
 	inline char g_RerunCommand[256] = "Wandelt.exe -test";
@@ -54,6 +55,16 @@ namespace Wandelt
 			snprintf(g_RerunCommand, sizeof(g_RerunCommand), "%s", command);
 	}
 
+	inline void SetTestUseColor(bool useColor)
+	{
+		g_TestUseColor = useColor;
+	}
+
+	inline const char* TestColor(const char* color)
+	{
+		return g_TestUseColor ? color : "";
+	}
+
 	inline bool TestMatchesFilter(const char* testName)
 	{
 		if (g_TestFilter[0] == '\0')
@@ -61,33 +72,35 @@ namespace Wandelt
 		return strcmp(g_TestFilter, testName) == 0;
 	}
 
-#define TEST(name)                                                                                                                               \
-	static void Test_##name(Allocator* alloc);                                                                                                   \
-	static void RunTest_##name(Allocator* alloc)                                                                                                 \
-	{                                                                                                                                            \
-		if (!TestMatchesFilter(#name))                                                                                                           \
-			return;                                                                                                                              \
-		g_TestsRun++;                                                                                                                            \
-		int failedBefore = g_TestsFailed;                                                                                                        \
-		ScopedTimer timer;                                                                                                                       \
-		printf("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "   %-50s", #name);                                                                      \
-		Test_##name(alloc);                                                                                                                      \
-		double elapsedMs = timer.GetElapsedMilliseconds();                                                                                       \
-		if (g_TestsFailed == failedBefore)                                                                                                       \
-		{                                                                                                                                        \
-			g_TestsPassed++;                                                                                                                     \
-			printf(ANSI_COLOR_GREEN "PASS" ANSI_COLOR_RESET ANSI_COLOR_DIM "  (%.3fms)" ANSI_COLOR_RESET "\n", elapsedMs);                       \
-		}                                                                                                                                        \
-		else                                                                                                                                     \
-		{                                                                                                                                        \
-			printf(ANSI_COLOR_RED "FAIL" ANSI_COLOR_RESET ANSI_COLOR_DIM "  (%.3fms)" ANSI_COLOR_RESET "\n", elapsedMs);                         \
-			printf("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_DIM "at %s:%d" ANSI_COLOR_RESET "\n", g_LastFailure.file,         \
-			       g_LastFailure.line);                                                                                                          \
-			printf("%s", g_LastFailure.message);                                                                                                 \
-			printf("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_DIM "rerun:" ANSI_COLOR_RESET " %s -filter=%s\n", g_RerunCommand, \
-			       #name);                                                                                                                       \
-		}                                                                                                                                        \
-	}                                                                                                                                            \
+#define TEST(name)                                                                                                                              \
+	static void Test_##name(Allocator* alloc);                                                                                                  \
+	static void RunTest_##name(Allocator* alloc)                                                                                                \
+	{                                                                                                                                           \
+		if (!TestMatchesFilter(#name))                                                                                                          \
+			return;                                                                                                                             \
+		g_TestsRun++;                                                                                                                           \
+		int failedBefore = g_TestsFailed;                                                                                                       \
+		ScopedTimer timer;                                                                                                                      \
+		printf("  %s|%s   %-70s", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), #name);                                               \
+		Test_##name(alloc);                                                                                                                     \
+		double elapsedMs = timer.GetElapsedMilliseconds();                                                                                      \
+		if (g_TestsFailed == failedBefore)                                                                                                      \
+		{                                                                                                                                       \
+			g_TestsPassed++;                                                                                                                    \
+			printf("%sPASS%s%s  (%.3fms)%s\n", TestColor(ANSI_COLOR_GREEN), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), elapsedMs,  \
+			       TestColor(ANSI_COLOR_RESET));                                                                                                \
+		}                                                                                                                                       \
+		else                                                                                                                                    \
+		{                                                                                                                                       \
+			printf("%sFAIL%s%s  (%.3fms)%s\n", TestColor(ANSI_COLOR_RED), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), elapsedMs,    \
+			       TestColor(ANSI_COLOR_RESET));                                                                                                \
+			printf("  %s|%s     %sat %s:%d%s\n", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),             \
+			       g_LastFailure.file, g_LastFailure.line, TestColor(ANSI_COLOR_RESET));                                                        \
+			printf("%s", g_LastFailure.message);                                                                                                \
+			printf("  %s|%s     %srerun:%s %s -filter=%s\n", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), \
+			       TestColor(ANSI_COLOR_RESET), g_RerunCommand, #name);                                                                         \
+		}                                                                                                                                       \
+	}                                                                                                                                           \
 	static void Test_##name(Allocator* alloc)
 
 #define WDT_RECORD_FAILURE(...)                                                      \
@@ -99,64 +112,75 @@ namespace Wandelt
 		g_TestsFailed++;                                                             \
 	} while (0)
 
-#define ASSERT_TRUE(expr)                                                                                                                 \
-	do                                                                                                                                    \
-	{                                                                                                                                     \
-		if (!(expr))                                                                                                                      \
-		{                                                                                                                                 \
-			WDT_RECORD_FAILURE("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_BOLD "ASSERT_TRUE" ANSI_COLOR_RESET "(%s)\n"   \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Expected:" ANSI_COLOR_RESET " true\n"   \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Actual:  " ANSI_COLOR_RESET " false\n", \
-			                   #expr);                                                                                                    \
-			return;                                                                                                                       \
-		}                                                                                                                                 \
+#define ASSERT_TRUE(expr)                                                                                                                       \
+	do                                                                                                                                          \
+	{                                                                                                                                           \
+		if (!(expr))                                                                                                                            \
+		{                                                                                                                                       \
+			WDT_RECORD_FAILURE("  %s|%s     %sASSERT_TRUE%s(%s)\n"                                                                              \
+			                   "  %s|%s       %sExpected:%s true\n"                                                                             \
+			                   "  %s|%s       %sActual:  %s false\n",                                                                           \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET), \
+			                   #expr, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),                        \
+			                   TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),  \
+			                   TestColor(ANSI_COLOR_RESET));                                                                                    \
+			return;                                                                                                                             \
+		}                                                                                                                                       \
 	} while (0)
 
-#define ASSERT_FALSE(expr)                                                                                                               \
-	do                                                                                                                                   \
-	{                                                                                                                                    \
-		if ((expr))                                                                                                                      \
-		{                                                                                                                                \
-			WDT_RECORD_FAILURE("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_BOLD "ASSERT_FALSE" ANSI_COLOR_RESET "(%s)\n" \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Expected:" ANSI_COLOR_RESET " false\n" \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Actual:  " ANSI_COLOR_RESET " true\n", \
-			                   #expr);                                                                                                   \
-			return;                                                                                                                      \
-		}                                                                                                                                \
+#define ASSERT_FALSE(expr)                                                                                                                      \
+	do                                                                                                                                          \
+	{                                                                                                                                           \
+		if ((expr))                                                                                                                             \
+		{                                                                                                                                       \
+			WDT_RECORD_FAILURE("  %s|%s     %sASSERT_FALSE%s(%s)\n"                                                                             \
+			                   "  %s|%s       %sExpected:%s false\n"                                                                            \
+			                   "  %s|%s       %sActual:  %s true\n",                                                                            \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET), \
+			                   #expr, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),                        \
+			                   TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),  \
+			                   TestColor(ANSI_COLOR_RESET));                                                                                    \
+			return;                                                                                                                             \
+		}                                                                                                                                       \
 	} while (0)
 
-#define ASSERT_EQ(actual, expected)                                                                                                       \
-	do                                                                                                                                    \
-	{                                                                                                                                     \
-		auto actualValue   = (actual);                                                                                                    \
-		auto expectedValue = (expected);                                                                                                  \
-		if (actualValue != expectedValue)                                                                                                 \
-		{                                                                                                                                 \
-			WDT_RECORD_FAILURE("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_BOLD "ASSERT_EQ" ANSI_COLOR_RESET "(%s, %s)\n" \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Expected:" ANSI_COLOR_RESET " %lld\n"   \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Actual:  " ANSI_COLOR_RESET " %lld\n",  \
-			                   #actual, #expected, (long long)expectedValue, (long long)actualValue);                                     \
-			return;                                                                                                                       \
-		}                                                                                                                                 \
+#define ASSERT_EQ(actual, expected)                                                                                                             \
+	do                                                                                                                                          \
+	{                                                                                                                                           \
+		auto actualValue   = (actual);                                                                                                          \
+		auto expectedValue = (expected);                                                                                                        \
+		if (actualValue != expectedValue)                                                                                                       \
+		{                                                                                                                                       \
+			WDT_RECORD_FAILURE("  %s|%s     %sASSERT_EQ%s(%s, %s)\n"                                                                            \
+			                   "  %s|%s       %sExpected:%s %lld\n"                                                                             \
+			                   "  %s|%s       %sActual:  %s %lld\n",                                                                            \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET), \
+			                   #actual, #expected, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),           \
+			                   TestColor(ANSI_COLOR_RESET), (long long)expectedValue, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET),   \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), (long long)actualValue);                                 \
+			return;                                                                                                                             \
+		}                                                                                                                                       \
 	} while (0)
 
-#define ASSERT_STR_EQ(actual, expected)                                                                                                       \
-	do                                                                                                                                        \
-	{                                                                                                                                         \
-		StringView actualValue    = (actual);                                                                                                 \
-		const char* expectedValue = (expected);                                                                                               \
-		u64 expectedValueLength   = strlen(expectedValue);                                                                                    \
-		if (actualValue.Length() != expectedValueLength || memcmp(actualValue.Data(), expectedValue, expectedValueLength) != 0)               \
-		{                                                                                                                                     \
-			WDT_RECORD_FAILURE("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_BOLD "ASSERT_STR_EQ" ANSI_COLOR_RESET "(%s, %s)\n" \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Expected:" ANSI_COLOR_RESET                 \
-			                   " \"%s\" " ANSI_COLOR_DIM "(length %llu)" ANSI_COLOR_RESET "\n"                                                \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Actual:  " ANSI_COLOR_RESET                 \
-			                   " \"%.*s\" " ANSI_COLOR_DIM "(length %llu)" ANSI_COLOR_RESET "\n",                                             \
-			                   #actual, #expected, expectedValue, (unsigned long long)expectedValueLength, (int)actualValue.Length(),         \
-			                   actualValue.Data(), (unsigned long long)actualValue.Length());                                                 \
-			return;                                                                                                                           \
-		}                                                                                                                                     \
+#define ASSERT_STR_EQ(actual, expected)                                                                                                         \
+	do                                                                                                                                          \
+	{                                                                                                                                           \
+		StringView actualValue    = (actual);                                                                                                   \
+		const char* expectedValue = (expected);                                                                                                 \
+		u64 expectedValueLength   = strlen(expectedValue);                                                                                      \
+		if (actualValue.Length() != expectedValueLength || memcmp(actualValue.Data(), expectedValue, expectedValueLength) != 0)                 \
+		{                                                                                                                                       \
+			WDT_RECORD_FAILURE("  %s|%s     %sASSERT_STR_EQ%s(%s, %s)\n"                                                                        \
+			                   "  %s|%s       %sExpected:%s \"%s\" %s(length %llu)%s\n"                                                         \
+			                   "  %s|%s       %sActual:  %s \"%.*s\" %s(length %llu)%s\n",                                                      \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET), \
+			                   #actual, #expected, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),           \
+			                   TestColor(ANSI_COLOR_RESET), expectedValue, TestColor(ANSI_COLOR_DIM), (unsigned long long)expectedValueLength,  \
+			                   TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),  \
+			                   TestColor(ANSI_COLOR_RESET), (int)actualValue.Length(), actualValue.Data(), TestColor(ANSI_COLOR_DIM),           \
+			                   (unsigned long long)actualValue.Length(), TestColor(ANSI_COLOR_RESET));                                          \
+			return;                                                                                                                             \
+		}                                                                                                                                       \
 	} while (0)
 
 #define ASSERT_NO_DIAGNOSTICS(diag)           \
@@ -166,19 +190,22 @@ namespace Wandelt
 		ASSERT_EQ((diag).WarningCount(), 0u); \
 	} while (0)
 
-#define ASSERT_STR_CONTAINS(actual, expected)                                                                                                        \
-	do                                                                                                                                               \
-	{                                                                                                                                                \
-		const char* actualValue   = (actual);                                                                                                        \
-		const char* expectedValue = (expected);                                                                                                      \
-		if (actualValue == NULL || strstr(actualValue, expectedValue) == NULL)                                                                       \
-		{                                                                                                                                            \
-			WDT_RECORD_FAILURE("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "     " ANSI_COLOR_BOLD "ASSERT_STR_CONTAINS" ANSI_COLOR_RESET "(%s, %s)\n"  \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "Expected substring:" ANSI_COLOR_RESET " \"%s\"\n"  \
-			                   "  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "       " ANSI_COLOR_DIM "In string:         " ANSI_COLOR_RESET " \"%s\"\n", \
-			                   #actual, #expected, expectedValue, actualValue ? actualValue : "(null)");                                             \
-			return;                                                                                                                                  \
-		}                                                                                                                                            \
+#define ASSERT_STR_CONTAINS(actual, expected)                                                                                                   \
+	do                                                                                                                                          \
+	{                                                                                                                                           \
+		const char* actualValue   = (actual);                                                                                                   \
+		const char* expectedValue = (expected);                                                                                                 \
+		if (actualValue == NULL || strstr(actualValue, expectedValue) == NULL)                                                                  \
+		{                                                                                                                                       \
+			WDT_RECORD_FAILURE("  %s|%s     %sASSERT_STR_CONTAINS%s(%s, %s)\n"                                                                  \
+			                   "  %s|%s       %sExpected substring:%s \"%s\"\n"                                                                 \
+			                   "  %s|%s       %sIn string:         %s \"%s\"\n",                                                                \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET), \
+			                   #actual, #expected, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM),           \
+			                   TestColor(ANSI_COLOR_RESET), expectedValue, TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET),              \
+			                   TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), actualValue ? actualValue : "(null)");                   \
+			return;                                                                                                                             \
+		}                                                                                                                                       \
 	} while (0)
 
 #define RUN_TEST(name) RunTest_##name(&arena)
@@ -190,8 +217,9 @@ namespace Wandelt
 
 	inline void PrintSection(const char* name)
 	{
-		printf("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "\n");
-		printf("  " ANSI_COLOR_DIM "+--" ANSI_COLOR_RESET " " ANSI_COLOR_CYAN ANSI_COLOR_BOLD "%s" ANSI_COLOR_RESET "\n", name);
+		printf("  %s|%s\n", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET));
+		printf("  %s+--%s %s%s%s%s\n", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_CYAN), TestColor(ANSI_COLOR_BOLD),
+		       name, TestColor(ANSI_COLOR_RESET));
 	}
 
 	inline TestResults PrintTestSummary(const char* suiteName, f64 totalMs)
@@ -202,19 +230,19 @@ namespace Wandelt
 		results.failed = g_TestsFailed;
 		results.timeMs = totalMs;
 
-		printf("  " ANSI_COLOR_DIM "|" ANSI_COLOR_RESET "\n");
-		printf("  " ANSI_COLOR_DIM "`--" ANSI_COLOR_RESET " ");
+		printf("  %s|%s\n", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET));
+		printf("  %s`--%s ", TestColor(ANSI_COLOR_DIM), TestColor(ANSI_COLOR_RESET));
 		if (g_TestsFailed == 0)
 		{
-			printf(ANSI_COLOR_GREEN ANSI_COLOR_BOLD "All %d %s tests passed" ANSI_COLOR_RESET ANSI_COLOR_DIM "  (%.2fms total)" ANSI_COLOR_RESET "\n",
-			       g_TestsRun, suiteName, totalMs);
+			printf("%s%sAll %d %s tests passed%s%s  (%.2fms total)%s\n", TestColor(ANSI_COLOR_GREEN), TestColor(ANSI_COLOR_BOLD), g_TestsRun,
+			       suiteName, TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), totalMs, TestColor(ANSI_COLOR_RESET));
 		}
 		else
 		{
-			printf(ANSI_COLOR_RED ANSI_COLOR_BOLD "%d of %d %s tests failed" ANSI_COLOR_RESET ANSI_COLOR_DIM "  (%.2fms total)" ANSI_COLOR_RESET "\n",
-			       g_TestsFailed, g_TestsRun, suiteName, totalMs);
-			printf("      " ANSI_COLOR_GREEN "%d passed" ANSI_COLOR_RESET ", " ANSI_COLOR_RED "%d failed" ANSI_COLOR_RESET "\n", g_TestsPassed,
-			       g_TestsFailed);
+			printf("%s%s%d of %d %s tests failed%s%s  (%.2fms total)%s\n", TestColor(ANSI_COLOR_RED), TestColor(ANSI_COLOR_BOLD), g_TestsFailed,
+			       g_TestsRun, suiteName, TestColor(ANSI_COLOR_RESET), TestColor(ANSI_COLOR_DIM), totalMs, TestColor(ANSI_COLOR_RESET));
+			printf("      %s%d passed%s, %s%d failed%s\n", TestColor(ANSI_COLOR_GREEN), g_TestsPassed, TestColor(ANSI_COLOR_RESET),
+			       TestColor(ANSI_COLOR_RED), g_TestsFailed, TestColor(ANSI_COLOR_RESET));
 		}
 		return results;
 	}

@@ -12,7 +12,10 @@ package example #entrypoint;
 *>
 fn int main()
 {
-	return 12;
+	int x = 12;
+	usz y = 15;
+
+	return y;
 }
 
 return main();

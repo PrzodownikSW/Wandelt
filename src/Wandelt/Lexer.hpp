@@ -17,6 +17,9 @@ namespace Wandelt
 		NONMOVABLE(Lexer);
 
 	public:
+		const File* GetFile() const { return m_File; }
+
+	public:
 		void EatToken();
 		Token PeekToken();
 		Token PeekTokenAtOffset(i32 offset);

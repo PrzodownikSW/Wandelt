@@ -139,6 +139,7 @@ namespace Wandelt
 		    {"package", TOKEN_TYPE_PACKAGE_KEYWORD, "package"},
 		    {"return", TOKEN_TYPE_RETURN_KEYWORD, "return"},
 		    {"as", TOKEN_TYPE_AS_KEYWORD, "as"},
+		    {"fn", TOKEN_TYPE_FN_KEYWORD, "fn"},
 		    {"void", TOKEN_TYPE_VOID_KEYWORD, "void"},
 		    {"bool", TOKEN_TYPE_BOOL_KEYWORD, "bool"},
 		    {"char", TOKEN_TYPE_CHAR_KEYWORD, "char"},
@@ -262,17 +263,26 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
-	TEST(BangBangToken)
+	TEST(DoubleCharacterTokens)
 	{
 		Diagnostics diag;
-		const char* source = "!!";
-		TokenList tokens   = LexSource(alloc, source, &diag);
 
-		ASSERT_FALSE(tokens.truncated);
-		ASSERT_EQ(tokens.count, 2);
-		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_BANG_BANG);
-		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[0]), "!!");
-		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		const SingleTokenCase cases[] = {
+		    {"!!", TOKEN_TYPE_BANG_BANG, "!!"},
+		};
+
+		for (u32 index = 0; index < ArraySize(cases); index++)
+		{
+			const SingleTokenCase& testCase = cases[index];
+			TokenList tokens                = LexSource(alloc, testCase.source, &diag);
+
+			ASSERT_FALSE(tokens.truncated);
+			ASSERT_EQ(tokens.count, 2);
+			ASSERT_EQ(tokens.items[0].type, testCase.type);
+			ASSERT_STR_EQ(TokenLexeme(testCase.source, tokens.items[0]), testCase.lexeme);
+			ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		}
+
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -1074,17 +1084,17 @@ namespace Wandelt
 	{
 		ResetTestCounters();
 
-		HeapAllocator heap   = GetHeapAllocator();
-		ArenaAllocator arena = GetArenaAllocator(&heap, Megabytes(4));
+		HeapAllocator heap;
+		ArenaAllocator arena(&heap, Megabytes(4));
 
 		ScopedTimer timer;
 
-		printf(ANSI_COLOR_BOLD "Running lexer tests..." ANSI_COLOR_RESET "\n");
+		printf("%sRunning lexer tests...%s\n", TestColor(ANSI_COLOR_BOLD), TestColor(ANSI_COLOR_RESET));
 
 		PrintSection("Token categories");
 		RUN_TEST(EmptyAndCommentOnlyInputs);
 		RUN_TEST(SingleCharacterTokens);
-		RUN_TEST(BangBangToken);
+		RUN_TEST(DoubleCharacterTokens);
 		RUN_TEST(Identifiers);
 		RUN_TEST(KeywordAndBuiltinTypeTokens);
 		RUN_TEST(DirectiveToken);

@@ -60,13 +60,13 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           set -o pipefail
-          ./bin/${{ matrix.config }}/Wandelt.exe -test 2>&1 | tee test.log
+          ./bin/${{ matrix.config }}/Wandelt.exe -test -no-colors 2>&1 | tee test.log
 
       - name: Test (Linux)
         if: runner.os == 'Linux'
         run: |
           set -o pipefail
-          ./bin/Wandelt -test 2>&1 | tee test.log
+          ./bin/Wandelt -test -no-colors 2>&1 | tee test.log
 
       - name: Upload logs
         if: always()
