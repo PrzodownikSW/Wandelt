@@ -50,10 +50,14 @@ echo.
 echo [5/5] Generating coverage report...
 echo.
 echo --- Summary ---
-llvm-cov report "%BIN%" -instr-profile="%PROFDATA%" -sources "%ROOT%\src\Wandelt"
+llvm-cov report "%BIN%" -instr-profile="%PROFDATA%" -sources "%ROOT%\src\Wandelt" -show-region-summary -show-branch-summary
 echo.
 
-llvm-cov show "%BIN%" -instr-profile="%PROFDATA%" -sources "%ROOT%\src\Wandelt" -format=html -output-dir="%REPORT_DIR%"
+llvm-cov show "%BIN%" -instr-profile="%PROFDATA%" -sources "%ROOT%\src\Wandelt" ^
+    -format=html ^
+    -show-line-counts-or-regions ^
+    -show-branches=count ^
+    -output-dir="%REPORT_DIR%"
 if %errorlevel% neq 0 (
     echo ERROR: llvm-cov failed.
     exit /b 1

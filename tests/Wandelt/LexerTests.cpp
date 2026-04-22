@@ -198,7 +198,9 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const char* cases[] = {
-		    "packageName", "returnValue", "castValue", "boolish", "trueValue", "false_alarm", "uintptr2", "rawptrValue", "discarded",
+		    "packageName", "returnValue", "castValue", "boolish",  "trueValue",  "false_alarm", "uintptr2",
+		    "rawptrValue", "discarded",   "intish",    "intptrly", "longish",    "doublish",    "shortish",
+		    "charish",     "stringish",   "floatish",  "voidish",  "rawptrish",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -957,6 +959,28 @@ namespace Wandelt
 		ASSERT_STR_CONTAINS(entry->message, "Unexpected character '#', did you mean '#entrypoint'?");
 	}
 
+	TEST(StandaloneLessThanReportsDiagnosticAndRecovers)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source = "< 42";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 3);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INVALID);
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_INTEGER);
+		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[1]), "42");
+		ASSERT_EQ(tokens.items[2].type, TOKEN_TYPE_EOF);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+
+		Diagnostics::Entry* entry = diag.GetCaptured(0);
+		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
+		ASSERT_EQ(entry->line, 1u);
+		ASSERT_EQ(entry->col, 1u);
+		ASSERT_STR_CONTAINS(entry->message, "Unexpected character '<'");
+	}
+
 	TEST(StandaloneSlashReportsDiagnosticAndRecovers)
 	{
 		Diagnostics diag;
@@ -1139,6 +1163,7 @@ namespace Wandelt
 		RUN_TEST(UnknownDirectiveReportsDiagnosticAndRecovers);
 		RUN_TEST(HashWithoutDirectiveReportsDiagnosticAndRecovers);
 		RUN_TEST(StandaloneSlashReportsDiagnosticAndRecovers);
+		RUN_TEST(StandaloneLessThanReportsDiagnosticAndRecovers);
 		RUN_TEST(MultipleErrorsAreReported);
 		RUN_TEST(ConsecutiveInvalidCharactersAreReported);
 		RUN_TEST(PeekAtOffsetReturnsInvalidForBadInput);

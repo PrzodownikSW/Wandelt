@@ -23,7 +23,6 @@ namespace Wandelt
 		void EatToken();
 		Token PeekToken();
 		Token PeekTokenAtOffset(i32 offset);
-		void DebugPrintToken(Token token);
 
 	private:
 		void Advance();

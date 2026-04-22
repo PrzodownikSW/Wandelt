@@ -65,17 +65,9 @@ namespace Wandelt
 		return result;
 	}
 
-	void Lexer::DebugPrintToken(Token token)
-	{
-		StringView tokenText{m_File->Content().Data() + token.span.begin, token.span.end - token.span.begin};
-
-		printf("Token: %s, Text: '%.*s'\n", TokenTypeToCStr(token.type), (int)tokenText.Length(), tokenText.Data());
-	}
-
 	void Lexer::Advance()
 	{
-		if (IsEOF())
-			return;
+		ASSERT(!IsEOF(), "Advance() called at EOF");
 
 		m_CurrentChar++;
 	}

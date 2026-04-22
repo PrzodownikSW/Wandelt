@@ -19,12 +19,15 @@ file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/tests/Wandelt/*.hpp
 )
 
+set(NATVIS_FILES ${CMAKE_SOURCE_DIR}/tools/Wandelt.natvis)
+
 source_group("src" FILES ${SOURCES})
 source_group("demo" FILES ${DEMO_FILES})
 source_group("docs" FILES ${DOCS_FILES})
 source_group("tests" FILES ${TEST_FILES})
+source_group("tools" FILES ${NATVIS_FILES})
 
-add_executable(${PROJECT_NAME} ${SOURCES} ${DEMO_FILES} ${TEST_FILES} ${DOCS_FILES})
+add_executable(${PROJECT_NAME} ${SOURCES} ${DEMO_FILES} ${TEST_FILES} ${DOCS_FILES} ${NATVIS_FILES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tests)

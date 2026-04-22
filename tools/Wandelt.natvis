@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="Wandelt::StringView">
+    <DisplayString Condition="m_Data == nullptr">null</DisplayString>
+    <DisplayString>{m_Data,[m_Len]s8}</DisplayString>
+    <StringView>m_Data,[m_Len]s8</StringView>
+    <Expand>
+      <Item Name="[length]">m_Len</Item>
+      <Item Name="[data]">m_Data</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="Wandelt::String">
+    <DisplayString Condition="m_Data == nullptr">null</DisplayString>
+    <DisplayString>{m_Data,[m_Len]s8}</DisplayString>
+    <StringView>m_Data,[m_Len]s8</StringView>
+    <Expand>
+      <Item Name="[length]">m_Len</Item>
+      <Item Name="[data]">m_Data</Item>
+      <Item Name="[allocator]">m_Allocator</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="Wandelt::Array&lt;*&gt;">
+    <DisplayString Condition="m_Data == nullptr">empty</DisplayString>
+    <DisplayString>{{ length={m_Len} capacity={m_Capacity} }}</DisplayString>
+    <Expand>
+      <Item Name="[length]">m_Len</Item>
+      <Item Name="[capacity]">m_Capacity</Item>
+      <Item Name="[allocator]">m_Allocator</Item>
+      <ArrayItems>
+        <Size>m_Len</Size>
+        <ValuePointer>m_Data</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="Wandelt::Vector&lt;*&gt;">
+    <Intrinsic Name="header"
+      Expression="(Wandelt::VectorHeader*)((char*)m_Data - ((sizeof(Wandelt::VectorHeader) + __alignof($T1) - 1) &amp; ~(__alignof($T1) - 1)))" />
+    <DisplayString Condition="m_Data == nullptr">empty</DisplayString>
+    <DisplayString>{{ length={header()->length} capacity={header()->capacity} }}</DisplayString>
+    <Expand>
+      <Item Name="[length]">header()->length</Item>
+      <Item Name="[capacity]">header()->capacity</Item>
+      <Item Name="[allocator]">header()->allocator</Item>
+      <ArrayItems>
+        <Size>header()->length</Size>
+        <ValuePointer>m_Data</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+</AutoVisualizer>

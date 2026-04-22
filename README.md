@@ -36,6 +36,7 @@ Output binaries go to the `bin/` directory.
 ## <ins>**5. Other scripts:**</ins>
 
 - [scripts/clean.bat](scripts/clean.bat) - Delete `build/` and `bin/` directories
+- [scripts/coverage.bat](scripts/coverage.bat) - Build an instrumented coverage configuration, run the test suite, and generate LLVM coverage reports
 - [scripts/run-clang-format.bat](scripts/run-clang-format.bat) - Format all source files
 
 ## <ins>**Documentation:**</ins>
