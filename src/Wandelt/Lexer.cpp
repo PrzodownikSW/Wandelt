@@ -187,6 +187,8 @@ namespace Wandelt
 			break;
 
 		case 'd':
+			if (ident == "discard")
+				return CreateNewToken(TOKEN_TYPE_DISCARD_KEYWORD);
 			if (ident == "double")
 				return CreateNewToken(TOKEN_TYPE_DOUBLE_KEYWORD);
 			break;

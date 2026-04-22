@@ -174,6 +174,7 @@ namespace Wandelt
 	struct ExpressionStatement
 	{
 		Expression* expression;
+		bool discarded;
 	};
 
 	struct ReturnStatement

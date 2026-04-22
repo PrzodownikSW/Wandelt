@@ -68,6 +68,7 @@ namespace Wandelt
 		case TOKEN_TYPE_PACKAGE_KEYWORD:
 		case TOKEN_TYPE_RETURN_KEYWORD:
 		case TOKEN_TYPE_FN_KEYWORD:
+		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
 			return true;
 		default:
@@ -120,6 +121,7 @@ namespace Wandelt
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseDeclarationStatement();
 
+		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
 			return ParseExpressionStatement();
 
@@ -148,6 +150,8 @@ namespace Wandelt
 
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseDeclarationStatement();
+
+		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
 			return ParseExpressionStatement();
 
@@ -178,8 +182,19 @@ namespace Wandelt
 
 	Statement* Parser::ParseExpressionStatement()
 	{
-		Statement* stmt             = m_StmtAllocator->Alloc<Statement>();
-		stmt->type                  = STATEMENT_TYPE_EXPRESSION;
+		Statement* stmt            = m_StmtAllocator->Alloc<Statement>();
+		stmt->type                 = STATEMENT_TYPE_EXPRESSION;
+		stmt->expression.discarded = false;
+
+		const Token firstToken = m_Lexer->PeekToken();
+		Token startToken       = firstToken;
+
+		if (firstToken.type == TOKEN_TYPE_DISCARD_KEYWORD)
+		{
+			stmt->expression.discarded = true;
+			m_Lexer->EatToken();
+		}
+
 		stmt->expression.expression = ParseExpression();
 
 		if (stmt->expression.expression->type == EXPRESSION_TYPE_INVALID)
@@ -189,7 +204,7 @@ namespace Wandelt
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidStmt;
 
-		stmt->span = Span::Extend(stmt->expression.expression->span, semicolonToken.span);
+		stmt->span = Span::Extend(startToken.span, semicolonToken.span);
 
 		return stmt;
 	}
@@ -703,6 +718,7 @@ namespace Wandelt
 	    /* RETURN_KEYWORD       */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* CAST_KEYWORD         */ {&Parser::ParseCastExpression, nullptr, PRECEDENCE_NONE},
 	    /* FN_KEYWORD           */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* DISCARD_KEYWORD      */ {nullptr, nullptr, PRECEDENCE_NONE},
 
 	    /* ENTRYPOINT_DIRECTIVE */ {nullptr, nullptr, PRECEDENCE_NONE},
 

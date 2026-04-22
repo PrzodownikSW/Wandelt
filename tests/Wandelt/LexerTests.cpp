@@ -140,6 +140,7 @@ namespace Wandelt
 		    {"return", TOKEN_TYPE_RETURN_KEYWORD, "return"},
 		    {"cast", TOKEN_TYPE_CAST_KEYWORD, "cast"},
 		    {"fn", TOKEN_TYPE_FN_KEYWORD, "fn"},
+		    {"discard", TOKEN_TYPE_DISCARD_KEYWORD, "discard"},
 		    {"void", TOKEN_TYPE_VOID_KEYWORD, "void"},
 		    {"bool", TOKEN_TYPE_BOOL_KEYWORD, "bool"},
 		    {"char", TOKEN_TYPE_CHAR_KEYWORD, "char"},
@@ -197,7 +198,7 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const char* cases[] = {
-		    "packageName", "returnValue", "castValue", "boolish", "trueValue", "false_alarm", "uintptr2", "rawptrValue",
+		    "packageName", "returnValue", "castValue", "boolish", "trueValue", "false_alarm", "uintptr2", "rawptrValue", "discarded",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)

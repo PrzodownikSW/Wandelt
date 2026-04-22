@@ -1,10 +1,3 @@
-# Revision history
-
-| Date       | Change                                                                  |
-| ---------- | ----------------------------------------------------------------------- |
-| 2026-04-22 | Renamed value-cast keyword from `as` to `cast`; force cast is `cast!!`. |
-| 2026-04-22 | Unsuffixed integer literals now default to `int` when they fit, otherwise stay as abstract integer constants until context resolves them. |
-
 # Variable declarations
 A variable declaration declares a new variable for the current scope.
 
@@ -13,7 +6,7 @@ int x = 12;
 usz y = 4;
 ```
 
-Variables must be initialized.
+Variables must be initialized. Not initializing a variable is an error.
 
 # Comments
 Comments can be anywhere outside of a string or character literal. Single line comments begin with //:
@@ -243,3 +236,22 @@ A function is called by writing its name followed by an argument list in parenth
 ```c
 return main();
 ```
+
+## Discarding return values
+
+When a call appears as an expression statement and the called function has a non-`void` return type, the returned value must be used or the call must be prefixed with the `discard` keyword. Silently dropping a non-`void` return value is an error.
+
+```c
+fn int work() { return 1; }
+fn void log() {}
+
+fn void main()
+{
+    work();          // error: return value of call to 'work' is unused
+    discard work();  // ok: the return value is explicitly ignored
+    log();           // ok: 'log' returns 'void'
+    discard log();   // warning: redundant 'discard' on a call that returns 'void'
+}
+```
+
+`discard` is a statement-level prefix; it may only appear immediately before an expression statement and is not an operator that participates in larger expressions.

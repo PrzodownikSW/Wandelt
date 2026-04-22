@@ -589,6 +589,66 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(UndiscardedNonVoidCallResultReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int helper() { return 1; }\n"
+		                                                                          "fn int main() { helper(); return 1; }",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 17u, "Return value of call to 'helper' is unused"}))
+			return;
+	}
+
+	TEST(DiscardedNonVoidCallAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int helper() { return 1; }\n"
+		                                                                          "fn int main() { discard helper(); return 1; }",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(VoidCallWithoutDiscardAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void helper() {}\n"
+		                                                                          "fn int main() { helper(); return 1; }",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DiscardOnVoidCallReportsRedundantWarning)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void helper() {}\n"
+		                                                                          "fn int main() { discard helper(); return 1; }",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(diag.ErrorCount(), 0u);
+		ASSERT_EQ(diag.WarningCount(), 1u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Warning, 2u, 17u, "Redundant 'discard' on call to 'helper'"}))
+			return;
+	}
+
 	TEST(CallResultRejectedWhenReturnNarrowsFromLong)
 	{
 		Diagnostics diag;
@@ -693,6 +753,10 @@ namespace Wandelt
 		RUN_TEST(AbstractIntegerConstantCannotImplicitlyBindToInt);
 		RUN_TEST(CallResultImplicitlyWidensToReturnType);
 		RUN_TEST(CallResultRejectedWhenReturnNarrowsFromLong);
+		RUN_TEST(UndiscardedNonVoidCallResultReportsDiagnostic);
+		RUN_TEST(DiscardedNonVoidCallAnalyzesSuccessfully);
+		RUN_TEST(VoidCallWithoutDiscardAnalyzesSuccessfully);
+		RUN_TEST(DiscardOnVoidCallReportsRedundantWarning);
 
 		PrintSection("Name resolution and calls");
 		RUN_TEST(UndeclaredIdentifierInInitializerReportsDiagnostic);

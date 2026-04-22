@@ -578,6 +578,7 @@ namespace Wandelt
 
 		Statement* expressionStatement = declaration->function.body->block.statements[0];
 		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		ASSERT_FALSE(expressionStatement->expression.discarded);
 		if (!AssertCallExpression(expressionStatement->expression.expression, "helper"))
 			return;
 
@@ -586,6 +587,54 @@ namespace Wandelt
 		if (!AssertIdentifierExpression(returnStatement->returnStmt.expression, "value"))
 			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DiscardExpressionStatementParsesAtTopLevel)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "discard main();", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Statement* statement = GetTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(statement->type, STATEMENT_TYPE_EXPRESSION);
+		ASSERT_TRUE(statement->expression.discarded);
+		if (!AssertCallExpression(statement->expression.expression, "main"))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DiscardExpressionStatementParsesInsideFunctionBody)
+	{
+		Diagnostics diag;
+		const char* source              = "fn int main() { discard helper(); return value; }";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 2u);
+
+		Statement* expressionStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		ASSERT_TRUE(expressionStatement->expression.discarded);
+		if (!AssertCallExpression(expressionStatement->expression.expression, "helper"))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DiscardMissingExpressionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "discard ;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 9u, "Expected an expression"}))
+			return;
 	}
 
 	TEST(CastExpressionParsesWithIdentifierOperand)
@@ -1077,6 +1126,8 @@ namespace Wandelt
 		RUN_TEST(FunctionDeclarationParsesMultilineBodyWithComments);
 		RUN_TEST(TopLevelCallExpressionStatementParses);
 		RUN_TEST(CallExpressionStatementParsesInsideFunctionBody);
+		RUN_TEST(DiscardExpressionStatementParsesAtTopLevel);
+		RUN_TEST(DiscardExpressionStatementParsesInsideFunctionBody);
 		RUN_TEST(MultipleTopLevelDeclarationsPreserveOrder);
 		RUN_TEST(CastExpressionParsesWithIdentifierOperand);
 		RUN_TEST(CastExpressionParsesWithConstantOperand);
@@ -1097,6 +1148,7 @@ namespace Wandelt
 		RUN_TEST(MissingReturnSemicolonReportsDiagnostic);
 		RUN_TEST(TopLevelIntegerLiteralStatementReportsDiagnostic);
 		RUN_TEST(BooleanLiteralStatementInFunctionBodyReportsDiagnostic);
+		RUN_TEST(DiscardMissingExpressionReportsDiagnostic);
 		RUN_TEST(InvalidCallTargetReportsDiagnostic);
 		RUN_TEST(MissingCallCloseParenReportsDiagnostic);
 		RUN_TEST(NumericLiteralOutOfRangeReportsDiagnostic);

@@ -127,7 +127,28 @@ namespace Wandelt
 
 	bool Sema::AnalyzeExpressionStatement(Statement* stmt)
 	{
-		return AnalyzeExpression(stmt->expression.expression, nullptr);
+		Expression* expr = stmt->expression.expression;
+		if (!AnalyzeExpression(expr, nullptr))
+			return false;
+
+		const bool discarded   = stmt->expression.discarded;
+		const bool isCall      = expr->type == EXPRESSION_TYPE_CALL;
+		const bool returnsVoid = isCall && expr->resolvedType == Type::GetBuiltinType(BUILTIN_TYPE_VOID);
+
+		if (!discarded && isCall && !returnsVoid)
+		{
+			m_Diagnostics->ReportError(stmt->span, m_TranslationUnit->file,
+			                           "Return value of call to '{}' is unused; use 'discard' to ignore it explicitly", expr->call.functionName);
+			return false;
+		}
+
+		if (discarded && isCall && returnsVoid)
+		{
+			m_Diagnostics->ReportWarning(stmt->span, m_TranslationUnit->file, "Redundant 'discard' on call to '{}' which returns 'void'",
+			                             expr->call.functionName);
+		}
+
+		return true;
 	}
 
 	bool Sema::AnalyzeReturnStatement(Statement* stmt)

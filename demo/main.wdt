@@ -11,6 +11,11 @@ package example #entrypoint;
 	*>
 *>
 
+fn int test()
+{
+	return 120;
+}
+
 fn int main()
 {
 	int x = 12;
@@ -18,6 +23,9 @@ fn int main()
 	float z = 270;
 	float xx = cast(float)x;
 	long value = 5000000000;
+
+	long ret = test();
+	discard test();
 
 	return cast(int) y;
 }

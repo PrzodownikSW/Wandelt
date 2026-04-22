@@ -14,6 +14,7 @@ namespace Wandelt
 		TOKEN_TYPE_RETURN_KEYWORD,  // 'return'
 		TOKEN_TYPE_CAST_KEYWORD,    // 'cast'
 		TOKEN_TYPE_FN_KEYWORD,      // 'fn'
+		TOKEN_TYPE_DISCARD_KEYWORD, // 'discard'
 
 		// Directives
 		TOKEN_TYPE_ENTRYPOINT_DIRECTIVE, // '#entrypoint'
