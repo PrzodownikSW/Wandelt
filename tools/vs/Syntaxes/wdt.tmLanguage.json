@@ -1,0 +1,143 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Wandelt",
+	"scopeName": "source.wdt",
+	"fileTypes": ["wdt"],
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#directives" },
+		{ "include": "#keywords" },
+		{ "include": "#types" },
+		{ "include": "#constants" },
+		{ "include": "#numbers" },
+		{ "include": "#functions" },
+		{ "include": "#operators" },
+		{ "include": "#punctuation" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.double-slash.wdt",
+					"match": "//.*$"
+				},
+				{
+					"name": "comment.block.wdt",
+					"begin": "<\\*",
+					"end": "\\*>",
+					"patterns": [
+						{ "include": "#comments" }
+					]
+				}
+			]
+		},
+		"directives": {
+			"patterns": [
+				{
+					"name": "keyword.other.directive.wdt",
+					"match": "#entrypoint\\b"
+				}
+			]
+		},
+		"keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.wdt",
+					"match": "\\b(return)\\b"
+				},
+				{
+					"name": "keyword.other.package.wdt",
+					"match": "\\b(package)\\b"
+				},
+				{
+					"name": "storage.type.function.wdt",
+					"match": "\\b(fn)\\b"
+				},
+				{
+					"name": "keyword.other.wdt",
+					"match": "\\b(cast|discard|default)\\b"
+				}
+			]
+		},
+		"types": {
+			"patterns": [
+				{
+					"name": "storage.type.wdt",
+					"match": "\\b(void|bool|char|uchar|short|ushort|int|uint|long|ulong|sz|usz|intptr|uintptr|float|double|string|cstring|rawptr)\\b"
+				}
+			]
+		},
+		"constants": {
+			"patterns": [
+				{
+					"name": "constant.language.boolean.wdt",
+					"match": "\\b(true|false)\\b"
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{
+					"name": "constant.numeric.float.wdt",
+					"match": "\\b\\d+\\.\\d*f|\\.\\d+f|\\b\\d+f"
+				},
+				{
+					"name": "constant.numeric.double.wdt",
+					"match": "\\b\\d+\\.\\d*d|\\.\\d+d|\\b\\d+d"
+				},
+				{
+					"name": "constant.numeric.integer.wdt",
+					"match": "\\b\\d+\\b"
+				}
+			]
+		},
+		"functions": {
+			"patterns": [
+				{
+					"name": "entity.name.function.wdt",
+					"match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"
+				}
+			]
+		},
+		"operators": {
+			"patterns": [
+				{
+					"name": "keyword.operator.force-cast.wdt",
+					"match": "!!"
+				},
+				{
+					"name": "keyword.operator.assignment.wdt",
+					"match": "="
+				}
+			]
+		},
+		"punctuation": {
+			"patterns": [
+				{
+					"name": "punctuation.terminator.wdt",
+					"match": ";"
+				},
+				{
+					"name": "punctuation.section.braces.begin.wdt",
+					"match": "\\{"
+				},
+				{
+					"name": "punctuation.section.braces.end.wdt",
+					"match": "\\}"
+				},
+				{
+					"name": "punctuation.section.parens.begin.wdt",
+					"match": "\\("
+				},
+				{
+					"name": "punctuation.section.parens.end.wdt",
+					"match": "\\)"
+				},
+				{
+					"name": "punctuation.accessor.dot.wdt",
+					"match": "\\."
+				}
+			]
+		}
+	}
+}

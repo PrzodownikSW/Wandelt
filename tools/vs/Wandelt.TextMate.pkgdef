@@ -1,0 +1,11 @@
+[$RootKey$\TextMate\Repositories]
+"Wandelt"="$PackageFolder$\Syntaxes"
+
+[$RootKey$\TextMate\ContentToGrammarMappings]
+"wdt"="source.wdt"
+
+[$RootKey$\TextMate\LanguageConfiguration\GrammarMapping]
+"source.wdt"="$PackageFolder$\Syntaxes\language-configuration.json"
+
+[$RootKey$\TextMate\LanguageConfiguration\ContentTypeMapping]
+"wdt"="$PackageFolder$\Syntaxes\language-configuration.json"
