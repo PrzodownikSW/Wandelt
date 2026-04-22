@@ -11,13 +11,9 @@ namespace Wandelt
 
 	enum ResolveStatus
 	{
-		RESOLVE_STATUS_INVALID = 0,
-
 		RESOLVE_STATUS_UNRESOLVED,
 		RESOLVE_STATUS_RESOLVING,
 		RESOLVE_STATUS_RESOLVED,
-
-		RESOLVE_STATUS_COUNT,
 	};
 
 	const char* ResolveStatusToCStr(ResolveStatus status);
@@ -32,6 +28,7 @@ namespace Wandelt
 
 		EXPRESSION_TYPE_CONSTANT,
 		EXPRESSION_TYPE_IDENTIFIER,
+		EXPRESSION_TYPE_CAST,
 		EXPRESSION_TYPE_CALL,
 
 		EXPRESSION_TYPE_COUNT,
@@ -71,6 +68,12 @@ namespace Wandelt
 		struct Declaration* declarationRef;
 	};
 
+	struct CastExpression
+	{
+		Type* targetType;
+		struct Expression* expression;
+	};
+
 	struct CallExpression
 	{
 		StringView functionName;
@@ -89,6 +92,7 @@ namespace Wandelt
 		union {
 			ConstantExpression constant;
 			IdentifierExpression identifier;
+			CastExpression cast;
 			CallExpression call;
 		};
 	};
@@ -135,6 +139,7 @@ namespace Wandelt
 	{
 		DeclarationType type;
 		Span span;
+		ResolveStatus resolveStatus;
 
 		union {
 			PackageDeclaration package;

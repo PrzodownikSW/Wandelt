@@ -5,6 +5,7 @@
 #include "Wandelt/Memory.hpp"
 #include "Wandelt/Parser.hpp"
 #include "Wandelt/ScopedTimer.hpp"
+#include "Wandelt/Sema.hpp"
 #include "Wandelt/String.hpp"
 
 using namespace Wandelt;
@@ -67,7 +68,8 @@ int main(int argc, char* argv[])
 	String demo_filepath = String::FromCStr(&stringArenaAllocator, DEMO_PATH "main.wdt");
 	File demo_file{&stringArenaAllocator, std::move(demo_filepath)};
 
-	double dtLexingParsing = 0.0;
+	f64 dtLexingParsing = 0.0;
+	f64 dtSema          = 0.0;
 
 	Diagnostics* diagnostics = new Diagnostics();
 	defer(delete diagnostics);
@@ -91,6 +93,29 @@ int main(int argc, char* argv[])
 		std::cerr << "Compilation failed with " << diagnostics->ErrorCount() << " error(s) and " << diagnostics->WarningCount() << " warning(s).\n";
 		return 1;
 	}
+
+	{
+		ScopedTimer timer;
+		Sema sema(&declArenaAllocator, &exprArenaAllocator, &tu, diagnostics);
+		if (!sema.Analyze())
+		{
+			std::cerr << "Semantic analysis failed with " << diagnostics->ErrorCount() << " error(s) and " << diagnostics->WarningCount()
+			          << " warning(s).\n";
+			return 1;
+		}
+
+		dtSema = timer.GetElapsedMilliseconds();
+
+		std::cout << "Semantic analysis took " << dtSema << " ms" << std::endl;
+	}
+
+	if (diagnostics->HasErrors())
+	{
+		std::cerr << "Compilation failed with " << diagnostics->ErrorCount() << " error(s) and " << diagnostics->WarningCount() << " warning(s).\n";
+		return 1;
+	}
+
+	std::cout << "Compilation succeeded with " << diagnostics->WarningCount() << " warning(s).\n";
 
 	return 0;
 }

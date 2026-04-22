@@ -11,6 +11,14 @@ namespace Wandelt
 		BuiltinTypeKind expectedKind;
 	};
 
+	struct ExpectedDiagnostic
+	{
+		Diagnostics::Severity severity;
+		u32 line;
+		u32 col;
+		const char* messageSubstring;
+	};
+
 	static TranslationUnit ParseSource(Allocator* alloc, const char* source, Diagnostics* diagnostics)
 	{
 		File file = MakeTestFile(alloc, source);
@@ -32,64 +40,273 @@ namespace Wandelt
 		return statement->declaration.declaration;
 	}
 
-	static void AssertBuiltinType(Type* type, BuiltinTypeKind expectedKind)
+	static bool AssertBuiltinType(Type* type, BuiltinTypeKind expectedKind)
 	{
-		ASSERT_TRUE(type != nullptr);
-		ASSERT_EQ(type->kind, TYPE_KIND_BUILTIN);
-		ASSERT_EQ(type->basic.kind, expectedKind);
+		if (type == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected builtin type, got null\n");
+			return false;
+		}
+
+		if (type->kind != TYPE_KIND_BUILTIN)
+		{
+			WDT_RECORD_FAILURE("  expected builtin type kind %d, got %d\n", TYPE_KIND_BUILTIN, type->kind);
+			return false;
+		}
+
+		if (type->basic.kind != expectedKind)
+		{
+			WDT_RECORD_FAILURE("  expected builtin type %d, got %d\n", expectedKind, type->basic.kind);
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertIdentifierExpression(Expression* expression, const char* expectedIdentifier)
+	static bool AssertIdentifierExpression(Expression* expression, const char* expectedIdentifier)
 	{
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_IDENTIFIER);
-		ASSERT_STR_EQ(expression->identifier.name, expectedIdentifier);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected identifier expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_IDENTIFIER)
+		{
+			WDT_RECORD_FAILURE("  expected identifier expression type %d, got %d\n", EXPRESSION_TYPE_IDENTIFIER, expression->type);
+			return false;
+		}
+
+		u64 expectedLength = strlen(expectedIdentifier);
+		if (expression->identifier.name.Length() != expectedLength ||
+		    memcmp(expression->identifier.name.Data(), expectedIdentifier, expectedLength) != 0)
+		{
+			WDT_RECORD_FAILURE("  expected identifier \"%s\", got \"%.*s\"\n", expectedIdentifier, (int)expression->identifier.name.Length(),
+			                   expression->identifier.name.Data());
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertIntegerConstant(Expression* expression, u64 expectedInteger)
+	static bool AssertIntegerConstant(Expression* expression, u64 expectedInteger)
 	{
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_CONSTANT);
-		ASSERT_EQ(expression->constant.kind, CONSTANT_KIND_INTEGER);
-		ASSERT_EQ(expression->constant.integerValue, expectedInteger);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected integer constant, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CONSTANT)
+		{
+			WDT_RECORD_FAILURE("  expected constant expression type %d, got %d\n", EXPRESSION_TYPE_CONSTANT, expression->type);
+			return false;
+		}
+
+		if (expression->constant.kind != CONSTANT_KIND_INTEGER)
+		{
+			WDT_RECORD_FAILURE("  expected integer constant kind %d, got %d\n", CONSTANT_KIND_INTEGER, expression->constant.kind);
+			return false;
+		}
+
+		if (expression->constant.integerValue != expectedInteger)
+		{
+			WDT_RECORD_FAILURE("  expected integer constant %llu, got %llu\n", expectedInteger, expression->constant.integerValue);
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertBooleanConstant(Expression* expression, bool expectedBoolean)
+	static bool AssertBooleanConstant(Expression* expression, bool expectedBoolean)
 	{
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_CONSTANT);
-		ASSERT_EQ(expression->constant.kind, CONSTANT_KIND_BOOLEAN);
-		ASSERT_EQ(expression->constant.booleanValue, expectedBoolean);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected boolean constant, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CONSTANT)
+		{
+			WDT_RECORD_FAILURE("  expected constant expression type %d, got %d\n", EXPRESSION_TYPE_CONSTANT, expression->type);
+			return false;
+		}
+
+		if (expression->constant.kind != CONSTANT_KIND_BOOLEAN)
+		{
+			WDT_RECORD_FAILURE("  expected boolean constant kind %d, got %d\n", CONSTANT_KIND_BOOLEAN, expression->constant.kind);
+			return false;
+		}
+
+		if (expression->constant.booleanValue != expectedBoolean)
+		{
+			WDT_RECORD_FAILURE("  expected boolean constant %d, got %d\n", expectedBoolean, expression->constant.booleanValue);
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertFloatConstant(Expression* expression, f32 expectedFloat)
+	static bool AssertFloatConstant(Expression* expression, f32 expectedFloat)
 	{
 		const f32 tolerance = 0.0001f;
 
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_CONSTANT);
-		ASSERT_EQ(expression->constant.kind, CONSTANT_KIND_FLOAT);
-		ASSERT_TRUE(expression->constant.floatValue >= expectedFloat - tolerance);
-		ASSERT_TRUE(expression->constant.floatValue <= expectedFloat + tolerance);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected float constant, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CONSTANT)
+		{
+			WDT_RECORD_FAILURE("  expected constant expression type %d, got %d\n", EXPRESSION_TYPE_CONSTANT, expression->type);
+			return false;
+		}
+
+		if (expression->constant.kind != CONSTANT_KIND_FLOAT)
+		{
+			WDT_RECORD_FAILURE("  expected float constant kind %d, got %d\n", CONSTANT_KIND_FLOAT, expression->constant.kind);
+			return false;
+		}
+
+		if (expression->constant.floatValue < expectedFloat - tolerance || expression->constant.floatValue > expectedFloat + tolerance)
+		{
+			WDT_RECORD_FAILURE("  expected float constant %.6f, got %.6f\n", expectedFloat, expression->constant.floatValue);
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertDoubleConstant(Expression* expression, f64 expectedDouble)
+	static bool AssertDoubleConstant(Expression* expression, f64 expectedDouble)
 	{
 		const f64 tolerance = 0.0000001;
 
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_CONSTANT);
-		ASSERT_EQ(expression->constant.kind, CONSTANT_KIND_DOUBLE);
-		ASSERT_TRUE(expression->constant.doubleValue >= expectedDouble - tolerance);
-		ASSERT_TRUE(expression->constant.doubleValue <= expectedDouble + tolerance);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected double constant, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CONSTANT)
+		{
+			WDT_RECORD_FAILURE("  expected constant expression type %d, got %d\n", EXPRESSION_TYPE_CONSTANT, expression->type);
+			return false;
+		}
+
+		if (expression->constant.kind != CONSTANT_KIND_DOUBLE)
+		{
+			WDT_RECORD_FAILURE("  expected double constant kind %d, got %d\n", CONSTANT_KIND_DOUBLE, expression->constant.kind);
+			return false;
+		}
+
+		if (expression->constant.doubleValue < expectedDouble - tolerance || expression->constant.doubleValue > expectedDouble + tolerance)
+		{
+			WDT_RECORD_FAILURE("  expected double constant %.12f, got %.12f\n", expectedDouble, expression->constant.doubleValue);
+			return false;
+		}
+
+		return true;
 	}
 
-	static void AssertCallExpression(Expression* expression, const char* expectedFunctionName)
+	static bool AssertCastExpression(Expression* expression, BuiltinTypeKind expectedTargetKind)
 	{
-		ASSERT_TRUE(expression != nullptr);
-		ASSERT_EQ(expression->type, EXPRESSION_TYPE_CALL);
-		ASSERT_STR_EQ(expression->call.functionName, expectedFunctionName);
-		ASSERT_EQ(expression->call.arguments.Length(), 0u);
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected cast expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CAST)
+		{
+			WDT_RECORD_FAILURE("  expected cast expression type %d, got %d\n", EXPRESSION_TYPE_CAST, expression->type);
+			return false;
+		}
+
+		if (!AssertBuiltinType(expression->cast.targetType, expectedTargetKind))
+			return false;
+
+		if (expression->cast.expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected cast operand expression, got null\n");
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool AssertCallExpression(Expression* expression, const char* expectedFunctionName)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected call expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CALL)
+		{
+			WDT_RECORD_FAILURE("  expected call expression type %d, got %d\n", EXPRESSION_TYPE_CALL, expression->type);
+			return false;
+		}
+
+		u64 expectedLength = strlen(expectedFunctionName);
+		if (expression->call.functionName.Length() != expectedLength ||
+		    memcmp(expression->call.functionName.Data(), expectedFunctionName, expectedLength) != 0)
+		{
+			WDT_RECORD_FAILURE("  expected call target \"%s\", got \"%.*s\"\n", expectedFunctionName, (int)expression->call.functionName.Length(),
+			                   expression->call.functionName.Data());
+			return false;
+		}
+
+		if (expression->call.arguments.Length() != 0u)
+		{
+			WDT_RECORD_FAILURE("  expected call with 0 arguments, got %llu\n", expression->call.arguments.Length());
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool AssertCapturedDiagnostic(Diagnostics* diagnostics, u32 index, const ExpectedDiagnostic& expected)
+	{
+		if (diagnostics == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected diagnostics object, got null\n");
+			return false;
+		}
+
+		if (index >= diagnostics->CapturedCount())
+		{
+			WDT_RECORD_FAILURE("  expected captured diagnostic at index %u, but count is %u\n", index, diagnostics->CapturedCount());
+			return false;
+		}
+
+		Diagnostics::Entry* entry = diagnostics->GetCaptured(index);
+		if (entry->severity != expected.severity)
+		{
+			WDT_RECORD_FAILURE("  expected diagnostic severity %d, got %d\n", expected.severity, entry->severity);
+			return false;
+		}
+
+		if (entry->line != expected.line)
+		{
+			WDT_RECORD_FAILURE("  expected diagnostic line %u, got %u\n", expected.line, entry->line);
+			return false;
+		}
+
+		if (entry->col != expected.col)
+		{
+			WDT_RECORD_FAILURE("  expected diagnostic column %u, got %u\n", expected.col, entry->col);
+			return false;
+		}
+
+		if (strstr(entry->message, expected.messageSubstring) == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected diagnostic containing \"%s\", got \"%s\"\n", expected.messageSubstring, entry->message);
+			return false;
+		}
+
+		return true;
 	}
 
 	TEST(PackageDeclarationParsesEntrypointDirective)
@@ -136,8 +353,10 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(declaration->variable.name, "flag");
-		AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_BOOL);
-		AssertBooleanConstant(declaration->variable.initializer, false);
+		if (!AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_BOOL))
+			return;
+		if (!AssertBooleanConstant(declaration->variable.initializer, false))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -153,8 +372,10 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(declaration->variable.name, "value");
-		AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_INT);
-		AssertIdentifierExpression(declaration->variable.initializer, "sourceValue");
+		if (!AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertIdentifierExpression(declaration->variable.initializer, "sourceValue"))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -170,8 +391,10 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(declaration->variable.name, "value");
-		AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_FLOAT);
-		AssertFloatConstant(declaration->variable.initializer, 3.25f);
+		if (!AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_FLOAT))
+			return;
+		if (!AssertFloatConstant(declaration->variable.initializer, 3.25f))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -187,8 +410,10 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(declaration->variable.name, "value");
-		AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_DOUBLE);
-		AssertDoubleConstant(declaration->variable.initializer, 6.5);
+		if (!AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_DOUBLE))
+			return;
+		if (!AssertDoubleConstant(declaration->variable.initializer, 6.5))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -218,8 +443,10 @@ namespace Wandelt
 
 			ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
 			ASSERT_STR_EQ(declaration->variable.name, "value");
-			AssertBuiltinType(declaration->variable.type, cases[index].expectedKind);
-			AssertIdentifierExpression(declaration->variable.initializer, "seed");
+			if (!AssertBuiltinType(declaration->variable.type, cases[index].expectedKind))
+				return;
+			if (!AssertIdentifierExpression(declaration->variable.initializer, "seed"))
+				return;
 			ASSERT_NO_DIAGNOSTICS(diag);
 		}
 	}
@@ -237,7 +464,8 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
 		ASSERT_STR_EQ(declaration->function.name, "main");
-		AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_INT);
+		if (!AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_INT))
+			return;
 		ASSERT_EQ(declaration->function.parameters.Length(), 0u);
 
 		Statement* body = declaration->function.body;
@@ -250,12 +478,15 @@ namespace Wandelt
 		Declaration* variableDeclaration = variableStatement->declaration.declaration;
 		ASSERT_EQ(variableDeclaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(variableDeclaration->variable.name, "value");
-		AssertBuiltinType(variableDeclaration->variable.type, BUILTIN_TYPE_INT);
-		AssertCallExpression(variableDeclaration->variable.initializer, "helper");
+		if (!AssertBuiltinType(variableDeclaration->variable.type, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertCallExpression(variableDeclaration->variable.initializer, "helper"))
+			return;
 
 		Statement* returnStatement = body->block.statements[1];
 		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
-		AssertIdentifierExpression(returnStatement->returnStmt.expression, "value");
+		if (!AssertIdentifierExpression(returnStatement->returnStmt.expression, "value"))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -271,10 +502,48 @@ namespace Wandelt
 
 		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
 		ASSERT_STR_EQ(declaration->function.name, "main");
-		AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_VOID);
+		if (!AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_VOID))
+			return;
 		ASSERT_EQ(declaration->function.parameters.Length(), 0u);
 		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
 		ASSERT_EQ(declaration->function.body->block.statements.Length(), 0u);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(FunctionDeclarationParsesMultilineBodyWithComments)
+	{
+		Diagnostics diag;
+		const char* source              = "fn int main()\n"
+		                                  "{\n"
+		                                  "\t<* keep this ignored *>\n"
+		                                  "\thelper();\n"
+		                                  "\t// return the previous result\n"
+		                                  "\treturn value;\n"
+		                                  "}";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Statement* statement     = GetTopLevelStatement(&translationUnit, 0);
+		Declaration* declaration = GetDeclarationFromStatement(statement);
+
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_STR_EQ(declaration->function.name, "main");
+		if (!AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 2u);
+
+		Statement* expressionStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		if (!AssertCallExpression(expressionStatement->expression.expression, "helper"))
+			return;
+
+		Statement* returnStatement = declaration->function.body->block.statements[1];
+		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
+		if (!AssertIdentifierExpression(returnStatement->returnStmt.expression, "value"))
+			return;
+
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -287,7 +556,8 @@ namespace Wandelt
 
 		Statement* statement = GetTopLevelStatement(&translationUnit, 0);
 		ASSERT_EQ(statement->type, STATEMENT_TYPE_EXPRESSION);
-		AssertCallExpression(statement->expression.expression, "main");
+		if (!AssertCallExpression(statement->expression.expression, "main"))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -308,12 +578,119 @@ namespace Wandelt
 
 		Statement* expressionStatement = declaration->function.body->block.statements[0];
 		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
-		AssertCallExpression(expressionStatement->expression.expression, "helper");
+		if (!AssertCallExpression(expressionStatement->expression.expression, "helper"))
+			return;
 
 		Statement* returnStatement = declaration->function.body->block.statements[1];
 		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
-		AssertIdentifierExpression(returnStatement->returnStmt.expression, "value");
+		if (!AssertIdentifierExpression(returnStatement->returnStmt.expression, "value"))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(CastExpressionParsesWithIdentifierOperand)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "float y = cast(float) x;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Statement* statement     = GetTopLevelStatement(&translationUnit, 0);
+		Declaration* declaration = GetDeclarationFromStatement(statement);
+
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(declaration->variable.name, "y");
+		if (!AssertBuiltinType(declaration->variable.type, BUILTIN_TYPE_FLOAT))
+			return;
+		if (!AssertCastExpression(declaration->variable.initializer, BUILTIN_TYPE_FLOAT))
+			return;
+		if (!AssertIdentifierExpression(declaration->variable.initializer->cast.expression, "x"))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(CastExpressionParsesWithConstantOperand)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int value = cast(int) 12;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		if (!AssertCastExpression(declaration->variable.initializer, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertIntegerConstant(declaration->variable.initializer->cast.expression, 12u))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(CastExpressionAppliesToCallResult)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int value = cast(int) helper();", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		if (!AssertCastExpression(declaration->variable.initializer, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertCallExpression(declaration->variable.initializer->cast.expression, "helper"))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(CastExpressionMissingOpenParenReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "int v = cast 12;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "Expected a '('"}))
+			return;
+	}
+
+	TEST(CastExpressionMissingTargetTypeReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "int v = cast() 12;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "Expected a type"}))
+			return;
+	}
+
+	TEST(CastExpressionMissingCloseParenReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "int v = cast(int 12;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 18u, "Expected a ')'"}))
+			return;
+	}
+
+	TEST(CastExpressionMissingOperandReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "int v = cast(int);", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 18u, "Expected an expression"}))
+			return;
 	}
 
 	TEST(TopLevelIntegerLiteralStatementReportsDiagnostic)
@@ -325,10 +702,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a top-level statement");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "Expected a top-level statement"}))
+			return;
 	}
 
 	TEST(BooleanLiteralStatementInFunctionBodyReportsDiagnostic)
@@ -337,14 +712,14 @@ namespace Wandelt
 		Diagnostics::CaptureScope capture(diag);
 		TranslationUnit translationUnit = ParseSource(alloc, "fn int main() { true; }", &diag);
 
-		ASSERT_EQ(translationUnit.statements.Length(), 2u);
-		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(translationUnit.statements[1]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(diag.CapturedCount(), 2u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a statement");
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 17u, "Expected a statement"}))
+			return;
 	}
 
 	TEST(MultipleTopLevelDeclarationsPreserveOrder)
@@ -363,8 +738,10 @@ namespace Wandelt
 		Declaration* variableDeclaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 1));
 		ASSERT_EQ(variableDeclaration->type, DECLARATION_TYPE_VARIABLE);
 		ASSERT_STR_EQ(variableDeclaration->variable.name, "answer");
-		AssertBuiltinType(variableDeclaration->variable.type, BUILTIN_TYPE_INT);
-		AssertIntegerConstant(variableDeclaration->variable.initializer, 42);
+		if (!AssertBuiltinType(variableDeclaration->variable.type, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertIntegerConstant(variableDeclaration->variable.initializer, 42))
+			return;
 
 		Declaration* functionDeclaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 2));
 		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
@@ -372,7 +749,8 @@ namespace Wandelt
 		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
 		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 1u);
 		ASSERT_EQ(functionDeclaration->function.body->block.statements[0]->type, STATEMENT_TYPE_RETURN);
-		AssertIdentifierExpression(functionDeclaration->function.body->block.statements[0]->returnStmt.expression, "answer");
+		if (!AssertIdentifierExpression(functionDeclaration->function.body->block.statements[0]->returnStmt.expression, "answer"))
+			return;
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -385,10 +763,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an identifier");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 9u, "Expected an identifier"}))
+			return;
 	}
 
 	TEST(DuplicateEntrypointDirectiveReportsDiagnostic)
@@ -400,10 +776,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Duplicate '#entrypoint' directive");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 26u, "Duplicate '#entrypoint' directive"}))
+			return;
 	}
 
 	TEST(MissingSemicolonAfterPackageDeclarationReportsDiagnostic)
@@ -415,10 +789,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ';'");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "Expected a ';'"}))
+			return;
 	}
 
 	TEST(MissingSemicolonAfterVariableDeclarationReportsDiagnostic)
@@ -430,10 +802,25 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 15u, "Expected a ';'"}))
+			return;
+	}
 
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ';'");
+	TEST(MissingSemicolonAfterVariableDeclarationReportsDiagnosticOnLaterLine)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source              = "package demo;\n"
+		                                  "int value = 42";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 2u);
+		Declaration* packageDeclaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(packageDeclaration->type, DECLARATION_TYPE_PACKAGE);
+		ASSERT_EQ(translationUnit.statements[1]->type, STATEMENT_TYPE_INVALID);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 15u, "Expected a ';'"}))
+			return;
 	}
 
 	TEST(MissingVariableIdentifierReportsDiagnostic)
@@ -445,10 +832,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an identifier");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 5u, "Expected an identifier"}))
+			return;
 	}
 
 	TEST(MissingVariableInitializerReportsDiagnostic)
@@ -460,10 +845,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an expression");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "Expected an expression"}))
+			return;
 	}
 
 	TEST(MissingFunctionNameReportsDiagnostic)
@@ -475,10 +858,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an identifier");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 8u, "Expected an identifier"}))
+			return;
 	}
 
 	TEST(FunctionWithParametersReportsDiagnostic)
@@ -487,14 +868,11 @@ namespace Wandelt
 		Diagnostics::CaptureScope capture(diag);
 		TranslationUnit translationUnit = ParseSource(alloc, "fn int main(int value) { return value; }", &diag);
 
-		ASSERT_EQ(translationUnit.statements.Length(), 2u);
+		ASSERT_TRUE(translationUnit.statements.Length() >= 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(translationUnit.statements[1]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(diag.CapturedCount(), 2u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ')'");
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "Expected a ')'"}))
+			return;
 	}
 
 	TEST(MissingFunctionBodyReportsDiagnostic)
@@ -506,10 +884,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a '{' to start a scope");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "Expected a '{' to start a scope"}))
+			return;
 	}
 
 	TEST(ReturnStatementMissingExpressionReportsDiagnostic)
@@ -518,14 +894,14 @@ namespace Wandelt
 		Diagnostics::CaptureScope capture(diag);
 		TranslationUnit translationUnit = ParseSource(alloc, "fn int main() { return; }", &diag);
 
-		ASSERT_EQ(translationUnit.statements.Length(), 2u);
-		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(translationUnit.statements[1]->type, STATEMENT_TYPE_INVALID);
-		ASSERT_EQ(diag.CapturedCount(), 2u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an expression");
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 23u, "Expected an expression"}))
+			return;
 	}
 
 	TEST(MissingReturnSemicolonReportsDiagnostic)
@@ -535,12 +911,43 @@ namespace Wandelt
 		TranslationUnit translationUnit = ParseSource(alloc, "fn int main() { return value }", &diag);
 
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
-		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 30u, "Expected a ';'"}))
+			return;
+	}
 
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ';'");
+	TEST(RecoveryContinuesInsideFunctionBodyAfterInvalidStatement)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source              = "fn int main() {\n"
+		                                  "    int x = 12;\n"
+		                                  "    usz y = 15;\n"
+		                                  "    float = 12;\n"
+		                                  "    return y;\n"
+		                                  "}";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_STR_EQ(functionDeclaration->function.name, "main");
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 3u);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements[0]->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements[1]->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements[2]->type, STATEMENT_TYPE_RETURN);
+		if (!AssertIdentifierExpression(functionDeclaration->function.body->block.statements[2]->returnStmt.expression, "y"))
+			return;
+
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 4u, 11u, "Expected an identifier"}))
+			return;
 	}
 
 	TEST(InvalidCallTargetReportsDiagnostic)
@@ -552,10 +959,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Call target must be an identifier");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "Call target must be an identifier"}))
+			return;
 	}
 
 	TEST(MissingCallCloseParenReportsDiagnostic)
@@ -567,10 +972,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ')'");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 20u, "Expected a ')'"}))
+			return;
 	}
 
 	TEST(NumericLiteralOutOfRangeReportsDiagnostic)
@@ -582,10 +985,8 @@ namespace Wandelt
 		ASSERT_EQ(translationUnit.statements.Length(), 1u);
 		ASSERT_EQ(translationUnit.statements[0]->type, STATEMENT_TYPE_INVALID);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "does not fit in integer");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "does not fit in integer"}))
+			return;
 	}
 
 	TEST(RecoveryContinuesAfterInvalidTopLevelStatement)
@@ -602,9 +1003,36 @@ namespace Wandelt
 		ASSERT_STR_EQ(packageDeclaration->package.name, "demo");
 
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected an identifier");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 5u, "Expected an identifier"}))
+			return;
+	}
+
+	TEST(RecoveryContinuesAfterMultipleConsecutiveInvalidStatementsInBlock)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source              = "fn int main() {\n"
+		                                  "    float = 1;\n"
+		                                  "    int = 2;\n"
+		                                  "    int value = 3;\n"
+		                                  "    return value;\n"
+		                                  "}";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 2u);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements[0]->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements[1]->type, STATEMENT_TYPE_RETURN);
+
+		ASSERT_EQ(diag.CapturedCount(), 2u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 11u, "Expected an identifier"}))
+			return;
+		if (!AssertCapturedDiagnostic(&diag, 1, {Diagnostics::Severity::Error, 3u, 9u, "Expected an identifier"}))
+			return;
 	}
 
 	TEST(RecoveryContinuesAfterInvalidFunctionDeclaration)
@@ -621,9 +1049,8 @@ namespace Wandelt
 		ASSERT_STR_EQ(packageDeclaration->package.name, "demo");
 
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-		Diagnostics::Entry* entry = diag.GetCaptured(0);
-		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
-		ASSERT_STR_CONTAINS(entry->message, "Expected a ')'");
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "Expected a ')'"}))
+			return;
 	}
 
 	TestResults RunParserTests()
@@ -647,15 +1074,20 @@ namespace Wandelt
 		RUN_TEST(VariableDeclarationsParseAllBuiltinTypes);
 		RUN_TEST(FunctionDeclarationParsesBlockStatements);
 		RUN_TEST(FunctionDeclarationParsesVoidReturnTypeAndEmptyBody);
+		RUN_TEST(FunctionDeclarationParsesMultilineBodyWithComments);
 		RUN_TEST(TopLevelCallExpressionStatementParses);
 		RUN_TEST(CallExpressionStatementParsesInsideFunctionBody);
 		RUN_TEST(MultipleTopLevelDeclarationsPreserveOrder);
+		RUN_TEST(CastExpressionParsesWithIdentifierOperand);
+		RUN_TEST(CastExpressionParsesWithConstantOperand);
+		RUN_TEST(CastExpressionAppliesToCallResult);
 
 		PrintSection("Diagnostics and recovery");
 		RUN_TEST(MissingPackageIdentifierReportsDiagnostic);
 		RUN_TEST(DuplicateEntrypointDirectiveReportsDiagnostic);
 		RUN_TEST(MissingSemicolonAfterPackageDeclarationReportsDiagnostic);
 		RUN_TEST(MissingSemicolonAfterVariableDeclarationReportsDiagnostic);
+		RUN_TEST(MissingSemicolonAfterVariableDeclarationReportsDiagnosticOnLaterLine);
 		RUN_TEST(MissingVariableIdentifierReportsDiagnostic);
 		RUN_TEST(MissingVariableInitializerReportsDiagnostic);
 		RUN_TEST(MissingFunctionNameReportsDiagnostic);
@@ -668,6 +1100,12 @@ namespace Wandelt
 		RUN_TEST(InvalidCallTargetReportsDiagnostic);
 		RUN_TEST(MissingCallCloseParenReportsDiagnostic);
 		RUN_TEST(NumericLiteralOutOfRangeReportsDiagnostic);
+		RUN_TEST(CastExpressionMissingOpenParenReportsDiagnostic);
+		RUN_TEST(CastExpressionMissingTargetTypeReportsDiagnostic);
+		RUN_TEST(CastExpressionMissingCloseParenReportsDiagnostic);
+		RUN_TEST(CastExpressionMissingOperandReportsDiagnostic);
+		RUN_TEST(RecoveryContinuesInsideFunctionBodyAfterInvalidStatement);
+		RUN_TEST(RecoveryContinuesAfterMultipleConsecutiveInvalidStatementsInBlock);
 		RUN_TEST(RecoveryContinuesAfterInvalidTopLevelStatement);
 		RUN_TEST(RecoveryContinuesAfterInvalidFunctionDeclaration);
 

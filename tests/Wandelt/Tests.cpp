@@ -4,6 +4,7 @@
 
 #include "LexerTests.hpp"
 #include "ParserTests.hpp"
+#include "SemaTests.hpp"
 
 namespace Wandelt
 {
@@ -30,6 +31,14 @@ namespace Wandelt
 			suitesFailed++;
 
 		r = RunParserTests();
+		totalRun += r.run;
+		totalPassed += r.passed;
+		totalFailed += r.failed;
+		suitesRun++;
+		if (r.failed > 0)
+			suitesFailed++;
+
+		r = RunSemaTests();
 		totalRun += r.run;
 		totalPassed += r.passed;
 		totalFailed += r.failed;

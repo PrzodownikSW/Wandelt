@@ -7,10 +7,6 @@ namespace Wandelt
 	{
 		switch (status)
 		{
-		case RESOLVE_STATUS_INVALID:
-			ASSERT(false, "Invalid resolve status!");
-			break;
-
 		case RESOLVE_STATUS_UNRESOLVED:
 			return "Unresolved";
 
@@ -19,10 +15,6 @@ namespace Wandelt
 
 		case RESOLVE_STATUS_RESOLVED:
 			return "Resolved";
-
-		case RESOLVE_STATUS_COUNT:
-			ASSERT(false, "Invalid resolve status!");
-			break;
 		}
 
 		UNREACHABLE();
@@ -44,6 +36,9 @@ namespace Wandelt
 
 		case EXPRESSION_TYPE_CALL:
 			return "CallExpression";
+
+		case EXPRESSION_TYPE_CAST:
+			return "CastExpression";
 
 		case EXPRESSION_TYPE_COUNT:
 			ASSERT(false, "Invalid expression type!");

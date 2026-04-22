@@ -1,3 +1,10 @@
+# Revision history
+
+| Date       | Change                                                                  |
+| ---------- | ----------------------------------------------------------------------- |
+| 2026-04-22 | Renamed value-cast keyword from `as` to `cast`; force cast is `cast!!`. |
+| 2026-04-22 | Unsuffixed integer literals now default to `int` when they fit, otherwise stay as abstract integer constants until context resolves them. |
+
 # Variable declarations
 A variable declaration declares a new variable for the current scope.
 
@@ -125,10 +132,44 @@ The `default` keyword might be used to explicitly set initial default value.
 
 Wandelt has two cast forms:
 
-* `as(T)v` performs a value conversion to the type `T`
-* `as!!(T)v` performs a force cast that reinterprets the bits of `v` as type `T`
+* `cast(T)v` performs a value conversion to the type `T`
+* `cast!!(T)v` performs a force cast that reinterprets the bits of `v` as type `T`
 
 Assignments between values of different types require an explicit conversion unless one of the implicit conversions listed below applies.
+
+## Literal typing
+
+Literal typing is context-sensitive.
+
+### Boolean literals
+
+`true` and `false` have type `bool`.
+
+### Floating-point literals
+
+Floating-point literals with an `f` suffix have type `float`.
+
+Floating-point literals with a `d` suffix have type `double`.
+
+### Integer literals
+
+Unsuffixed integer literals are analyzed as follows:
+
+* If there is an expected type and that type can represent the literal value exactly, the literal takes that type directly.
+* Otherwise, if the value fits in `int`, the literal has type `int`.
+* Otherwise, the literal remains an abstract integer constant until a surrounding context resolves it.
+
+The abstract integer constant type is an internal compile-time-only concept. It is not a source-level type and cannot be written in user code.
+
+Examples:
+
+```c
+float x = 12;               // `12` is typed as `float`
+double y = 12;              // `12` is typed as `double`
+int z = 12;                 // `12` is typed as `int`
+long a = 5000000000;        // `5000000000` is typed as `long`
+ulong b = 18446744073709551615; // typed as `ulong`
+```
 
 ### Implicit conversions
 
@@ -139,6 +180,9 @@ Implicit conversions are only allowed for widening conversions within the same n
 * `float` -> `double`
 
 No other implicit conversions are allowed.
+
+> [!NOTE]
+> The integer-literal rules above are about how literals acquire a type. They do not imply a general implicit conversion from integers to floating-point types.
 
 In particular, there are no implicit conversions:
 
@@ -151,7 +195,7 @@ In particular, there are no implicit conversions:
 
 ### Explicit value conversions
 
-`as(T)v` performs a value conversion. It does not reinterpret bits.
+`cast(T)v` performs a value conversion. It does not reinterpret bits.
 
 Explicit conversions are allowed between all arithmetic types:
 
@@ -166,11 +210,11 @@ This includes:
 * integer and floating point conversions
 * boolean and numeric conversions
 
-There are no normal `as(T)` conversions involving `string`, `cstring`, or `rawptr` except to the same type.
+There are no normal `cast(T)` conversions involving `string`, `cstring`, or `rawptr` except to the same type.
 
 ### Force casts
 
-`as!!(T)v` reinterprets the bit pattern of `v` as `T`.
+`cast!!(T)v` reinterprets the bit pattern of `v` as `T`.
 
 ## Built-in constants
 

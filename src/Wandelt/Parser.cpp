@@ -9,6 +9,72 @@ namespace Wandelt
 	static Declaration s_InvalidDecl = {.type = DECLARATION_TYPE_INVALID};
 	static Expression s_InvalidExpr  = {.type = EXPRESSION_TYPE_INVALID};
 
+	static BuiltinTypeKind BuiltinTypeKindFromTokenType(TokenType type)
+	{
+		switch (type)
+		{
+		case TOKEN_TYPE_VOID_KEYWORD:
+			return BUILTIN_TYPE_VOID;
+		case TOKEN_TYPE_BOOL_KEYWORD:
+			return BUILTIN_TYPE_BOOL;
+		case TOKEN_TYPE_CHAR_KEYWORD:
+			return BUILTIN_TYPE_CHAR;
+		case TOKEN_TYPE_UCHAR_KEYWORD:
+			return BUILTIN_TYPE_UCHAR;
+		case TOKEN_TYPE_SHORT_KEYWORD:
+			return BUILTIN_TYPE_SHORT;
+		case TOKEN_TYPE_USHORT_KEYWORD:
+			return BUILTIN_TYPE_USHORT;
+		case TOKEN_TYPE_INT_KEYWORD:
+			return BUILTIN_TYPE_INT;
+		case TOKEN_TYPE_UINT_KEYWORD:
+			return BUILTIN_TYPE_UINT;
+		case TOKEN_TYPE_LONG_KEYWORD:
+			return BUILTIN_TYPE_LONG;
+		case TOKEN_TYPE_ULONG_KEYWORD:
+			return BUILTIN_TYPE_ULONG;
+		case TOKEN_TYPE_SZ_KEYWORD:
+			return BUILTIN_TYPE_SZ;
+		case TOKEN_TYPE_USZ_KEYWORD:
+			return BUILTIN_TYPE_USZ;
+		case TOKEN_TYPE_INTPTR_KEYWORD:
+			return BUILTIN_TYPE_INTPTR;
+		case TOKEN_TYPE_UINTPTR_KEYWORD:
+			return BUILTIN_TYPE_UINTPTR;
+		case TOKEN_TYPE_FLOAT_KEYWORD:
+			return BUILTIN_TYPE_FLOAT;
+		case TOKEN_TYPE_DOUBLE_KEYWORD:
+			return BUILTIN_TYPE_DOUBLE;
+		case TOKEN_TYPE_STRING_KEYWORD:
+			return BUILTIN_TYPE_STRING;
+		case TOKEN_TYPE_CSTRING_KEYWORD:
+			return BUILTIN_TYPE_CSTRING;
+		case TOKEN_TYPE_RAWPTR_KEYWORD:
+			return BUILTIN_TYPE_RAWPTR;
+		default:
+			return BUILTIN_TYPE_INVALID;
+		}
+	}
+
+	static bool IsBuiltinTypeKeyword(TokenType type)
+	{
+		return BuiltinTypeKindFromTokenType(type) != BUILTIN_TYPE_INVALID;
+	}
+
+	static bool IsStatementStarter(TokenType type)
+	{
+		switch (type)
+		{
+		case TOKEN_TYPE_PACKAGE_KEYWORD:
+		case TOKEN_TYPE_RETURN_KEYWORD:
+		case TOKEN_TYPE_FN_KEYWORD:
+		case TOKEN_TYPE_IDENTIFIER:
+			return true;
+		default:
+			return IsBuiltinTypeKeyword(type);
+		}
+	}
+
 	Parser::Parser(Allocator* stmtAllocator, Allocator* declAllocator, Allocator* exprAllocator, Lexer* lexer, Diagnostics* diagnostics)
 	    : m_StmtAllocator(stmtAllocator), m_DeclAllocator(declAllocator), m_ExprAllocator(exprAllocator), m_Lexer(lexer), m_Diagnostics(diagnostics)
 	{
@@ -26,7 +92,7 @@ namespace Wandelt
 			ASSERT(stmt);
 
 			if (stmt->type == STATEMENT_TYPE_INVALID)
-				RecoverFromError();
+				RecoverFromError(ParseScope::TopLevel);
 
 			/*if (lastStmt != nullptr)
 			    lastStmt->next = stmt;
@@ -54,33 +120,14 @@ namespace Wandelt
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseDeclarationStatement();
 
-		case TOKEN_TYPE_VOID_KEYWORD:
-		case TOKEN_TYPE_BOOL_KEYWORD:
-		case TOKEN_TYPE_CHAR_KEYWORD:
-		case TOKEN_TYPE_UCHAR_KEYWORD:
-		case TOKEN_TYPE_SHORT_KEYWORD:
-		case TOKEN_TYPE_USHORT_KEYWORD:
-		case TOKEN_TYPE_INT_KEYWORD:
-		case TOKEN_TYPE_UINT_KEYWORD:
-		case TOKEN_TYPE_LONG_KEYWORD:
-		case TOKEN_TYPE_ULONG_KEYWORD:
-		case TOKEN_TYPE_SZ_KEYWORD:
-		case TOKEN_TYPE_USZ_KEYWORD:
-		case TOKEN_TYPE_INTPTR_KEYWORD:
-		case TOKEN_TYPE_UINTPTR_KEYWORD:
-		case TOKEN_TYPE_FLOAT_KEYWORD:
-		case TOKEN_TYPE_DOUBLE_KEYWORD:
-		case TOKEN_TYPE_STRING_KEYWORD:
-		case TOKEN_TYPE_CSTRING_KEYWORD:
-		case TOKEN_TYPE_RAWPTR_KEYWORD:
-			return ParseDeclarationStatement();
-
 		case TOKEN_TYPE_IDENTIFIER:
 			return ParseExpressionStatement();
 
 		default:
-			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a top-level statement, but found {}'", TokenTypeToCStr(token.type));
+			if (IsBuiltinTypeKeyword(token.type))
+				return ParseDeclarationStatement();
 
+			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a top-level statement, but found '{}'", TokenTypeToCStr(token.type));
 			break;
 		}
 
@@ -101,34 +148,14 @@ namespace Wandelt
 
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseDeclarationStatement();
-
-		case TOKEN_TYPE_VOID_KEYWORD:
-		case TOKEN_TYPE_BOOL_KEYWORD:
-		case TOKEN_TYPE_CHAR_KEYWORD:
-		case TOKEN_TYPE_UCHAR_KEYWORD:
-		case TOKEN_TYPE_SHORT_KEYWORD:
-		case TOKEN_TYPE_USHORT_KEYWORD:
-		case TOKEN_TYPE_INT_KEYWORD:
-		case TOKEN_TYPE_UINT_KEYWORD:
-		case TOKEN_TYPE_LONG_KEYWORD:
-		case TOKEN_TYPE_ULONG_KEYWORD:
-		case TOKEN_TYPE_SZ_KEYWORD:
-		case TOKEN_TYPE_USZ_KEYWORD:
-		case TOKEN_TYPE_INTPTR_KEYWORD:
-		case TOKEN_TYPE_UINTPTR_KEYWORD:
-		case TOKEN_TYPE_FLOAT_KEYWORD:
-		case TOKEN_TYPE_DOUBLE_KEYWORD:
-		case TOKEN_TYPE_STRING_KEYWORD:
-		case TOKEN_TYPE_CSTRING_KEYWORD:
-		case TOKEN_TYPE_RAWPTR_KEYWORD:
-			return ParseDeclarationStatement();
-
 		case TOKEN_TYPE_IDENTIFIER:
 			return ParseExpressionStatement();
 
 		default:
-			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a statement, but found {}'", TokenTypeToCStr(token.type));
+			if (IsBuiltinTypeKeyword(token.type))
+				return ParseDeclarationStatement();
 
+			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a statement, but found '{}'", TokenTypeToCStr(token.type));
 			break;
 		}
 
@@ -206,11 +233,14 @@ namespace Wandelt
 
 		stmt->block.statements = Vector<Statement*>::Create(m_StmtAllocator, 4);
 
-		while (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_BRACE)
+		while (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_BRACE && m_Lexer->PeekToken().type != TOKEN_TYPE_EOF)
 		{
 			Statement* innerStmt = ParseInnerStatement();
 			if (innerStmt->type == STATEMENT_TYPE_INVALID)
-				return &s_InvalidStmt;
+			{
+				RecoverFromError(ParseScope::Block);
+				continue;
+			}
 
 			stmt->block.statements.Push(innerStmt);
 		}
@@ -236,28 +266,10 @@ namespace Wandelt
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseFunctionDeclaration();
 
-		case TOKEN_TYPE_VOID_KEYWORD:
-		case TOKEN_TYPE_BOOL_KEYWORD:
-		case TOKEN_TYPE_CHAR_KEYWORD:
-		case TOKEN_TYPE_UCHAR_KEYWORD:
-		case TOKEN_TYPE_SHORT_KEYWORD:
-		case TOKEN_TYPE_USHORT_KEYWORD:
-		case TOKEN_TYPE_INT_KEYWORD:
-		case TOKEN_TYPE_UINT_KEYWORD:
-		case TOKEN_TYPE_LONG_KEYWORD:
-		case TOKEN_TYPE_ULONG_KEYWORD:
-		case TOKEN_TYPE_SZ_KEYWORD:
-		case TOKEN_TYPE_USZ_KEYWORD:
-		case TOKEN_TYPE_INTPTR_KEYWORD:
-		case TOKEN_TYPE_UINTPTR_KEYWORD:
-		case TOKEN_TYPE_FLOAT_KEYWORD:
-		case TOKEN_TYPE_DOUBLE_KEYWORD:
-		case TOKEN_TYPE_STRING_KEYWORD:
-		case TOKEN_TYPE_CSTRING_KEYWORD:
-		case TOKEN_TYPE_RAWPTR_KEYWORD:
-			return ParseVariableDeclaration();
-
 		default:
+			if (IsBuiltinTypeKeyword(token.type))
+				return ParseVariableDeclaration();
+
 			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a declaration, but found '{}'", TokenTypeToCStr(token.type));
 			break;
 		}
@@ -271,8 +283,8 @@ namespace Wandelt
 		if (!ParseToken(TOKEN_TYPE_PACKAGE_KEYWORD))
 			return &s_InvalidDecl;
 
-		Declaration* decl          = m_DeclAllocator->Alloc<Declaration>();
-		decl->type                 = DECLARATION_TYPE_PACKAGE;
+		Declaration* decl = m_DeclAllocator->Alloc<Declaration>();
+		decl->type        = DECLARATION_TYPE_PACKAGE;
 
 		if (!ParseIdentifier(&decl->package.name))
 			return &s_InvalidDecl;
@@ -501,6 +513,36 @@ namespace Wandelt
 		return expr;
 	}
 
+	Expression* Parser::ParseCastExpression()
+	{
+		const Token asToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_CAST_KEYWORD))
+			return &s_InvalidExpr;
+
+		if (!ParseToken(TOKEN_TYPE_OPEN_PAREN))
+			return &s_InvalidExpr;
+
+		Type* targetType = nullptr;
+		if (!ParseType(&targetType))
+			return &s_InvalidExpr;
+
+		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
+			return &s_InvalidExpr;
+
+		// Parse the operand at POSTFIX precedence so `cast(T) foo()` parses as `cast(T)(foo())`
+		Expression* operand = ParseExpressionWithPrecedence(PRECEDENCE_POSTFIX);
+		if (operand->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		Expression* expr      = m_ExprAllocator->Alloc<Expression>();
+		expr->type            = EXPRESSION_TYPE_CAST;
+		expr->span            = Span::Extend(asToken.span, operand->span);
+		expr->cast.targetType = targetType;
+		expr->cast.expression = operand;
+
+		return expr;
+	}
+
 	Expression* Parser::ParseCallExpression(Expression* left)
 	{
 		if (left->type != EXPRESSION_TYPE_IDENTIFIER)
@@ -513,9 +555,9 @@ namespace Wandelt
 		if (!ParseToken(TOKEN_TYPE_OPEN_PAREN))
 			return &s_InvalidExpr;
 
-		Expression* expr            = m_ExprAllocator->Alloc<Expression>();
-		expr->type                  = EXPRESSION_TYPE_CALL;
-		expr->call.functionName     = left->identifier.name;
+		Expression* expr        = m_ExprAllocator->Alloc<Expression>();
+		expr->type              = EXPRESSION_TYPE_CALL;
+		expr->call.functionName = left->identifier.name;
 
 		const Token closeParen = m_Lexer->PeekToken();
 		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
@@ -526,26 +568,75 @@ namespace Wandelt
 		return expr;
 	}
 
-	void Parser::RecoverFromError()
+	void Parser::RecoverFromError(ParseScope scope)
 	{
-		while (m_Lexer->PeekToken().type != TOKEN_TYPE_EOF)
+		i32 braceDepth = 0;
+		i32 parenDepth = 0;
+
+		while (true)
 		{
-			switch (m_Lexer->PeekToken().type)
+			const TokenType type = m_Lexer->PeekToken().type;
+
+			if (type == TOKEN_TYPE_EOF)
+				return;
+
+			if (braceDepth > 0 || parenDepth > 0)
 			{
-			// Synchronize and skip past them and resume
+				switch (type)
+				{
+				case TOKEN_TYPE_OPEN_BRACE:
+					braceDepth++;
+					break;
+				case TOKEN_TYPE_CLOSE_BRACE:
+					if (braceDepth > 0)
+						braceDepth--;
+					break;
+				case TOKEN_TYPE_OPEN_PAREN:
+					parenDepth++;
+					break;
+				case TOKEN_TYPE_CLOSE_PAREN:
+					if (parenDepth > 0)
+						parenDepth--;
+					break;
+				default:
+					break;
+				}
+				m_Lexer->EatToken();
+				continue;
+			}
+
+			switch (type)
+			{
 			case TOKEN_TYPE_SEMICOLON:
 				m_Lexer->EatToken();
 				return;
 
-			// Synchronize and skip past closing braces
-			case TOKEN_TYPE_CLOSE_BRACE:
+			case TOKEN_TYPE_OPEN_BRACE:
+				braceDepth++;
 				m_Lexer->EatToken();
-				return;
+				continue;
+
+			case TOKEN_TYPE_OPEN_PAREN:
+				parenDepth++;
+				m_Lexer->EatToken();
+				continue;
+
+			case TOKEN_TYPE_CLOSE_BRACE:
+				// In a block: leave it for the enclosing ParseBlockStatement to consume.
+				// At top level: stray brace — eat it and keep scanning.
+				if (scope == ParseScope::Block)
+					return;
+				m_Lexer->EatToken();
+				continue;
 
 			default:
-				m_Lexer->EatToken();
 				break;
 			}
+
+			if (IsStatementStarter(type))
+				return;
+
+			m_Lexer->EatToken();
 		}
 	}
 
@@ -589,52 +680,7 @@ namespace Wandelt
 	{
 		Token token = m_Lexer->PeekToken();
 
-		BuiltinTypeKind builtinType = [&token] {
-			switch (token.type)
-			{
-			case TOKEN_TYPE_VOID_KEYWORD:
-				return BUILTIN_TYPE_VOID;
-			case TOKEN_TYPE_BOOL_KEYWORD:
-				return BUILTIN_TYPE_BOOL;
-			case TOKEN_TYPE_CHAR_KEYWORD:
-				return BUILTIN_TYPE_CHAR;
-			case TOKEN_TYPE_UCHAR_KEYWORD:
-				return BUILTIN_TYPE_UCHAR;
-			case TOKEN_TYPE_SHORT_KEYWORD:
-				return BUILTIN_TYPE_SHORT;
-			case TOKEN_TYPE_USHORT_KEYWORD:
-				return BUILTIN_TYPE_USHORT;
-			case TOKEN_TYPE_INT_KEYWORD:
-				return BUILTIN_TYPE_INT;
-			case TOKEN_TYPE_UINT_KEYWORD:
-				return BUILTIN_TYPE_UINT;
-			case TOKEN_TYPE_LONG_KEYWORD:
-				return BUILTIN_TYPE_LONG;
-			case TOKEN_TYPE_ULONG_KEYWORD:
-				return BUILTIN_TYPE_ULONG;
-			case TOKEN_TYPE_SZ_KEYWORD:
-				return BUILTIN_TYPE_SZ;
-			case TOKEN_TYPE_USZ_KEYWORD:
-				return BUILTIN_TYPE_USZ;
-			case TOKEN_TYPE_INTPTR_KEYWORD:
-				return BUILTIN_TYPE_INTPTR;
-			case TOKEN_TYPE_UINTPTR_KEYWORD:
-				return BUILTIN_TYPE_UINTPTR;
-			case TOKEN_TYPE_FLOAT_KEYWORD:
-				return BUILTIN_TYPE_FLOAT;
-			case TOKEN_TYPE_DOUBLE_KEYWORD:
-				return BUILTIN_TYPE_DOUBLE;
-			case TOKEN_TYPE_STRING_KEYWORD:
-				return BUILTIN_TYPE_STRING;
-			case TOKEN_TYPE_CSTRING_KEYWORD:
-				return BUILTIN_TYPE_CSTRING;
-			case TOKEN_TYPE_RAWPTR_KEYWORD:
-				return BUILTIN_TYPE_RAWPTR;
-			default:
-				return BUILTIN_TYPE_INVALID;
-			}
-		}();
-
+		BuiltinTypeKind builtinType = BuiltinTypeKindFromTokenType(token.type);
 		if (builtinType == BUILTIN_TYPE_INVALID)
 		{
 			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a type, but got '{}'", TokenTypeToCStr(token.type));
@@ -655,7 +701,7 @@ namespace Wandelt
 
 	    /* PACKAGE_KEYWORD      */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* RETURN_KEYWORD       */ {nullptr, nullptr, PRECEDENCE_NONE},
-	    /* AS_KEYWORD           */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* CAST_KEYWORD         */ {&Parser::ParseCastExpression, nullptr, PRECEDENCE_NONE},
 	    /* FN_KEYWORD           */ {nullptr, nullptr, PRECEDENCE_NONE},
 
 	    /* ENTRYPOINT_DIRECTIVE */ {nullptr, nullptr, PRECEDENCE_NONE},

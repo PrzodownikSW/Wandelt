@@ -172,17 +172,14 @@ namespace Wandelt
 
 		switch (ident.Data()[0])
 		{
-		case 'a':
-			if (ident == "as")
-				return CreateNewToken(TOKEN_TYPE_AS_KEYWORD);
-			break;
-
 		case 'b':
 			if (ident == "bool")
 				return CreateNewToken(TOKEN_TYPE_BOOL_KEYWORD);
 			break;
 
 		case 'c':
+			if (ident == "cast")
+				return CreateNewToken(TOKEN_TYPE_CAST_KEYWORD);
 			if (ident == "char")
 				return CreateNewToken(TOKEN_TYPE_CHAR_KEYWORD);
 			if (ident == "cstring")

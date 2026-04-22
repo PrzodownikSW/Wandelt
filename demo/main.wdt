@@ -10,12 +10,16 @@ package example #entrypoint;
 		comment
 	*>
 *>
+
 fn int main()
 {
 	int x = 12;
 	usz y = 15;
+	float z = 270;
+	float xx = cast(float)x;
+	long value = 5000000000;
 
-	return y;
+	return cast(int) y;
 }
 
 return main();

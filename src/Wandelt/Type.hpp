@@ -22,25 +22,26 @@ namespace Wandelt
 	{
 		BUILTIN_TYPE_INVALID = 0,
 
-		BUILTIN_TYPE_VOID,    // 0 bits
-		BUILTIN_TYPE_BOOL,    // 1 bit
-		BUILTIN_TYPE_CHAR,    // 8 bits
-		BUILTIN_TYPE_SHORT,   // 16 bits
-		BUILTIN_TYPE_INT,     // 32 bits
-		BUILTIN_TYPE_LONG,    // 64 bits
-		BUILTIN_TYPE_SZ,      // 32 or 64 bits depending on the platform
-		BUILTIN_TYPE_INTPTR,  // 32 or 64 bits depending on the platform
-		BUILTIN_TYPE_UCHAR,   // 8 bits
-		BUILTIN_TYPE_USHORT,  // 16 bits
-		BUILTIN_TYPE_UINT,    // 32 bits
-		BUILTIN_TYPE_ULONG,   // 64 bits
-		BUILTIN_TYPE_USZ,     // 32 or 64 bits depending on the platform
-		BUILTIN_TYPE_UINTPTR, // 32 or 64 bits depending on the platform
-		BUILTIN_TYPE_FLOAT,   // 32 bits, IEEE 754 single precision
-		BUILTIN_TYPE_DOUBLE,  // 64 bits, IEEE 754 double precision
-		BUILTIN_TYPE_STRING,  // ptr to data and length
-		BUILTIN_TYPE_CSTRING, // ptr to null-terminated data
-		BUILTIN_TYPE_RAWPTR,  // ptr to something
+		BUILTIN_TYPE_VOID,         // 0 bits
+		BUILTIN_TYPE_BOOL,         // 1 bit
+		BUILTIN_TYPE_CHAR,         // 8 bits
+		BUILTIN_TYPE_SHORT,        // 16 bits
+		BUILTIN_TYPE_INT,          // 32 bits
+		BUILTIN_TYPE_LONG,         // 64 bits
+		BUILTIN_TYPE_SZ,           // 32 or 64 bits depending on the platform
+		BUILTIN_TYPE_INTPTR,       // 32 or 64 bits depending on the platform
+		BUILTIN_TYPE_UCHAR,        // 8 bits
+		BUILTIN_TYPE_USHORT,       // 16 bits
+		BUILTIN_TYPE_UINT,         // 32 bits
+		BUILTIN_TYPE_ULONG,        // 64 bits
+		BUILTIN_TYPE_USZ,          // 32 or 64 bits depending on the platform
+		BUILTIN_TYPE_UINTPTR,      // 32 or 64 bits depending on the platform
+		BUILTIN_TYPE_ABSTRACT_INT, // compile-time only integer literal type
+		BUILTIN_TYPE_FLOAT,        // 32 bits, IEEE 754 single precision
+		BUILTIN_TYPE_DOUBLE,       // 64 bits, IEEE 754 double precision
+		BUILTIN_TYPE_STRING,       // ptr to data and length
+		BUILTIN_TYPE_CSTRING,      // ptr to null-terminated data
+		BUILTIN_TYPE_RAWPTR,       // ptr to something
 
 		BUILTIN_TYPE_COUNT,
 	};
@@ -101,9 +102,13 @@ namespace Wandelt
 
 		bool IsImplicitlyConvertibleTo(Type* other);
 		bool IsExplicitlyConvertibleTo(Type* other);
+		bool CanRepresentIntegerConstant(u64 value) const;
+
+		std::string ToString() const;
 
 		static Type* GetBuiltinType(BuiltinTypeKind kind);
 		static Type* TryGetBuiltinType(BuiltinTypeKind kind);
+		static Type* GetDefaultTypeForIntegerConstant(u64 value);
 
 		static Type* GetImplicitCommonType(Type* a, Type* b);
 

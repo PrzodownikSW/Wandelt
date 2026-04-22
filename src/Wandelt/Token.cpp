@@ -17,8 +17,8 @@ namespace Wandelt
 		case TOKEN_TYPE_RETURN_KEYWORD:
 			return "return";
 
-		case TOKEN_TYPE_AS_KEYWORD:
-			return "as";
+		case TOKEN_TYPE_CAST_KEYWORD:
+			return "cast";
 
 		case TOKEN_TYPE_FN_KEYWORD:
 			return "fn";

@@ -14,6 +14,9 @@ namespace Wandelt
 		if (c == '\t')
 			return offset + (SourceDisplayTabWidth - (offset % SourceDisplayTabWidth));
 
+		if (c == '\r')
+			return offset;
+
 		return offset + 1;
 	}
 

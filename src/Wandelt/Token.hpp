@@ -12,7 +12,7 @@ namespace Wandelt
 		// Keywords
 		TOKEN_TYPE_PACKAGE_KEYWORD, // 'package'
 		TOKEN_TYPE_RETURN_KEYWORD,  // 'return'
-		TOKEN_TYPE_AS_KEYWORD,      // 'as'
+		TOKEN_TYPE_CAST_KEYWORD,    // 'cast'
 		TOKEN_TYPE_FN_KEYWORD,      // 'fn'
 
 		// Directives

@@ -138,7 +138,7 @@ namespace Wandelt
 		const SingleTokenCase cases[] = {
 		    {"package", TOKEN_TYPE_PACKAGE_KEYWORD, "package"},
 		    {"return", TOKEN_TYPE_RETURN_KEYWORD, "return"},
-		    {"as", TOKEN_TYPE_AS_KEYWORD, "as"},
+		    {"cast", TOKEN_TYPE_CAST_KEYWORD, "cast"},
 		    {"fn", TOKEN_TYPE_FN_KEYWORD, "fn"},
 		    {"void", TOKEN_TYPE_VOID_KEYWORD, "void"},
 		    {"bool", TOKEN_TYPE_BOOL_KEYWORD, "bool"},
@@ -197,7 +197,7 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const char* cases[] = {
-		    "packageName", "returnValue", "asValue", "boolish", "trueValue", "false_alarm", "uintptr2", "rawptrValue",
+		    "packageName", "returnValue", "castValue", "boolish", "trueValue", "false_alarm", "uintptr2", "rawptrValue",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)

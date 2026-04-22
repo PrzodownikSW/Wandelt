@@ -48,6 +48,12 @@ namespace Wandelt
 		TranslationUnit Parse();
 
 	private:
+		enum class ParseScope
+		{
+			TopLevel,
+			Block
+		};
+
 		Statement* ParseTopLevelStatement();
 		Statement* ParseInnerStatement();
 		Statement* ParseDeclarationStatement();
@@ -64,9 +70,10 @@ namespace Wandelt
 		Expression* ParseExpressionWithPrecedence(Precedence minPrecedence);
 		Expression* ParseConstantExpression();
 		Expression* ParseIdentifierExpression();
+		Expression* ParseCastExpression();
 		Expression* ParseCallExpression(Expression* left);
 
-		void RecoverFromError();
+		void RecoverFromError(ParseScope scope);
 
 		bool ParseToken(TokenType expectedType);
 		bool ParseIdentifier(StringView* outIdentifier);
