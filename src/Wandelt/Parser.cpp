@@ -294,7 +294,10 @@ namespace Wandelt
 		stmt->expression.discarded = false;
 
 		const Token firstToken = m_Lexer->PeekToken();
-		Token startToken       = firstToken;
+		if (firstToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		Token startToken = firstToken;
 
 		if (firstToken.type == TOKEN_TYPE_DISCARD_KEYWORD)
 		{
@@ -308,6 +311,9 @@ namespace Wandelt
 			return &s_InvalidStmt;
 
 		const Token semicolonToken = m_Lexer->PeekToken();
+		if (semicolonToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidStmt;
 
@@ -322,6 +328,9 @@ namespace Wandelt
 		stmt->type      = STATEMENT_TYPE_RETURN;
 
 		const Token returnToken = m_Lexer->PeekToken();
+		if (returnToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_RETURN_KEYWORD))
 			return &s_InvalidStmt;
 
@@ -330,6 +339,9 @@ namespace Wandelt
 			return &s_InvalidStmt;
 
 		const Token semicolonToken = m_Lexer->PeekToken();
+		if (semicolonToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidStmt;
 
@@ -341,6 +353,9 @@ namespace Wandelt
 	Statement* Parser::ParseBlockStatement()
 	{
 		const Token openBrace = m_Lexer->PeekToken();
+		if (openBrace.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (openBrace.type != TOKEN_TYPE_OPEN_BRACE)
 		{
 			m_Diagnostics->ReportError(openBrace.span, m_Lexer->GetFile(), "Expected a '{{' to start a scope, but got '{}'",
@@ -368,6 +383,9 @@ namespace Wandelt
 		}
 
 		const Token closeBrace = m_Lexer->PeekToken();
+		if (closeBrace.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_CLOSE_BRACE))
 			return &s_InvalidStmt;
 
@@ -379,6 +397,9 @@ namespace Wandelt
 	Statement* Parser::ParseIfStatement()
 	{
 		const Token ifToken = m_Lexer->PeekToken();
+		if (ifToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_IF_KEYWORD))
 			return &s_InvalidStmt;
 
@@ -419,6 +440,9 @@ namespace Wandelt
 	Statement* Parser::ParseWhileStatement()
 	{
 		const Token whileToken = m_Lexer->PeekToken();
+		if (whileToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_WHILE_KEYWORD))
 			return &s_InvalidStmt;
 
@@ -441,6 +465,9 @@ namespace Wandelt
 	Statement* Parser::ParseForStatement()
 	{
 		const Token forToken = m_Lexer->PeekToken();
+		if (forToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_FOR_KEYWORD))
 			return &s_InvalidStmt;
 
@@ -449,6 +476,9 @@ namespace Wandelt
 
 		// init: variable declaration or expression statement; both consume their own trailing ';'.
 		const Token initToken = m_Lexer->PeekToken();
+		if (initToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (IsBuiltinTypeKeyword(initToken.type))
 			stmt->forStmt.init = ParseDeclarationStatement();
 		else
@@ -480,10 +510,16 @@ namespace Wandelt
 	Statement* Parser::ParseBreakStatement()
 	{
 		const Token breakToken = m_Lexer->PeekToken();
+		if (breakToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_BREAK_KEYWORD))
 			return &s_InvalidStmt;
 
 		const Token semicolonToken = m_Lexer->PeekToken();
+		if (semicolonToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidStmt;
 
@@ -497,6 +533,9 @@ namespace Wandelt
 	Statement* Parser::ParseContinueStatement()
 	{
 		const Token continueToken = m_Lexer->PeekToken();
+		if (continueToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidStmt;
+
 		if (!ParseToken(TOKEN_TYPE_CONTINUE_KEYWORD))
 			return &s_InvalidStmt;
 
@@ -514,6 +553,8 @@ namespace Wandelt
 	Declaration* Parser::ParseDeclaration()
 	{
 		Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
 
 		switch (token.type)
 		{
@@ -537,6 +578,9 @@ namespace Wandelt
 	Declaration* Parser::ParsePackageDeclaration()
 	{
 		const Token packageToken = m_Lexer->PeekToken();
+		if (packageToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
+
 		if (!ParseToken(TOKEN_TYPE_PACKAGE_KEYWORD))
 			return &s_InvalidDecl;
 
@@ -549,6 +593,8 @@ namespace Wandelt
 		while (true)
 		{
 			const Token directiveToken = m_Lexer->PeekToken();
+			if (directiveToken.type == TOKEN_TYPE_INVALID)
+				return &s_InvalidDecl;
 
 			if (directiveToken.type == TOKEN_TYPE_ENTRYPOINT_DIRECTIVE)
 			{
@@ -567,6 +613,9 @@ namespace Wandelt
 		}
 
 		const Token semicolonToken = m_Lexer->PeekToken();
+		if (semicolonToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
+
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidDecl;
 
@@ -578,6 +627,8 @@ namespace Wandelt
 	Declaration* Parser::ParseVariableDeclaration()
 	{
 		const Token startToken = m_Lexer->PeekToken();
+		if (startToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
 
 		Declaration* decl = m_DeclAllocator->Alloc<Declaration>();
 		decl->type        = DECLARATION_TYPE_VARIABLE;
@@ -596,6 +647,9 @@ namespace Wandelt
 			return &s_InvalidDecl;
 
 		const Token semicolonToken = m_Lexer->PeekToken();
+		if (semicolonToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
+
 		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
 			return &s_InvalidDecl;
 
@@ -607,6 +661,9 @@ namespace Wandelt
 	Declaration* Parser::ParseFunctionDeclaration()
 	{
 		const Token fnToken = m_Lexer->PeekToken();
+		if (fnToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidDecl;
+
 		if (!ParseToken(TOKEN_TYPE_FN_KEYWORD))
 			return &s_InvalidDecl;
 
@@ -659,6 +716,8 @@ namespace Wandelt
 	bool Parser::ParseFunctionParameter(Declaration** outParameter)
 	{
 		const Token startToken = m_Lexer->PeekToken();
+		if (startToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
 
 		Declaration* parameter = m_DeclAllocator->Alloc<Declaration>();
 		parameter->type        = DECLARATION_TYPE_VARIABLE;
@@ -667,6 +726,9 @@ namespace Wandelt
 			return false;
 
 		const Token nameToken = m_Lexer->PeekToken();
+		if (nameToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!ParseIdentifier(&parameter->variable.name))
 			return false;
 
@@ -712,6 +774,8 @@ namespace Wandelt
 		while (minPrecedence <= s_ParseRules[m_Lexer->PeekToken().type].precedence)
 		{
 			const Token infixToken = m_Lexer->PeekToken();
+			if (infixToken.type == TOKEN_TYPE_INVALID)
+				return &s_InvalidExpr;
 
 			InfixParseFn infixRule = s_ParseRules[infixToken.type].infix;
 			if (infixRule == nullptr)
@@ -731,6 +795,8 @@ namespace Wandelt
 	Expression* Parser::ParseConstantExpression()
 	{
 		const Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
 
 		Expression* expr = m_ExprAllocator->Alloc<Expression>();
 		expr->type       = EXPRESSION_TYPE_CONSTANT;
@@ -854,6 +920,8 @@ namespace Wandelt
 	Expression* Parser::ParseUnaryExpression()
 	{
 		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
 
 		UnaryOperator op = UNARY_OPERATOR_INVALID;
 		switch (operatorToken.type)
@@ -889,6 +957,9 @@ namespace Wandelt
 		ASSERT(left != nullptr);
 
 		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!IsBinaryOperatorToken(operatorToken.type))
 		{
 			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected a binary operator, but found '{}'",
@@ -897,6 +968,7 @@ namespace Wandelt
 		}
 
 		const Precedence precedence = s_ParseRules[operatorToken.type].precedence;
+
 		m_Lexer->EatToken();
 
 		Expression* right = ParseExpressionWithPrecedence(GetNextHigherPrecedence(precedence));
@@ -940,6 +1012,8 @@ namespace Wandelt
 	Expression* Parser::ParseIdentifierExpression()
 	{
 		const Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
 
 		Expression* expr = m_ExprAllocator->Alloc<Expression>();
 		expr->type       = EXPRESSION_TYPE_IDENTIFIER;
@@ -954,6 +1028,9 @@ namespace Wandelt
 	Expression* Parser::ParseCastExpression()
 	{
 		const Token asToken = m_Lexer->PeekToken();
+		if (asToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!ParseToken(TOKEN_TYPE_CAST_KEYWORD))
 			return &s_InvalidExpr;
 
@@ -984,6 +1061,9 @@ namespace Wandelt
 	Expression* Parser::ParsePrefixIncDecExpression()
 	{
 		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!IsIncDecToken(operatorToken.type))
 		{
 			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected '++' or '--', but found '{}'",
@@ -1013,6 +1093,9 @@ namespace Wandelt
 		ASSERT(left != nullptr);
 
 		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!IsIncDecToken(operatorToken.type))
 		{
 			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected '++' or '--', but found '{}'",
@@ -1095,6 +1178,9 @@ namespace Wandelt
 		}
 
 		const Token closeParen = m_Lexer->PeekToken();
+		if (closeParen.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
 			return &s_InvalidExpr;
 
@@ -1113,6 +1199,9 @@ namespace Wandelt
 		if (m_Lexer->PeekToken().type == TOKEN_TYPE_IDENTIFIER && m_Lexer->PeekTokenAtOffset(1).type == TOKEN_TYPE_EQUALS)
 		{
 			const Token nameToken = m_Lexer->PeekToken();
+			if (nameToken.type == TOKEN_TYPE_INVALID)
+				return &s_InvalidExpr;
+
 			if (!ParseIdentifier(&outArgument->name))
 				return false;
 
@@ -1141,6 +1230,9 @@ namespace Wandelt
 		ASSERT(left != nullptr);
 
 		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
 		if (!IsAssignmentToken(operatorToken.type))
 			return left;
 
@@ -1237,6 +1329,8 @@ namespace Wandelt
 	bool Parser::ParseToken(TokenType expectedType)
 	{
 		Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return false;
 
 		if (token.type != expectedType)
 		{
@@ -1254,6 +1348,8 @@ namespace Wandelt
 	bool Parser::ParseIdentifier(StringView* outIdentifier)
 	{
 		Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return false;
 
 		if (token.type != TOKEN_TYPE_IDENTIFIER)
 		{
@@ -1273,6 +1369,8 @@ namespace Wandelt
 	bool Parser::ParseType(Type** outType)
 	{
 		Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return false;
 
 		BuiltinTypeKind builtinType = BuiltinTypeKindFromTokenType(token.type);
 		if (builtinType == BUILTIN_TYPE_INVALID)
