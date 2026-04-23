@@ -27,9 +27,14 @@ namespace Wandelt
 		EXPRESSION_TYPE_INVALID = 0,
 
 		EXPRESSION_TYPE_CONSTANT,
+		EXPRESSION_TYPE_UNARY,
+		EXPRESSION_TYPE_BINARY,
+		EXPRESSION_TYPE_GROUP,
 		EXPRESSION_TYPE_IDENTIFIER,
 		EXPRESSION_TYPE_CAST,
+		EXPRESSION_TYPE_INCDEC,
 		EXPRESSION_TYPE_CALL,
+		EXPRESSION_TYPE_ASSIGNMENT,
 
 		EXPRESSION_TYPE_COUNT,
 	};
@@ -44,6 +49,8 @@ namespace Wandelt
 		CONSTANT_KIND_FLOAT,
 		CONSTANT_KIND_DOUBLE,
 		CONSTANT_KIND_BOOLEAN,
+		CONSTANT_KIND_CHAR,
+		CONSTANT_KIND_STRING,
 
 		CONSTANT_KIND_COUNT,
 	};
@@ -59,7 +66,64 @@ namespace Wandelt
 			f32 floatValue;
 			f64 doubleValue;
 			bool booleanValue;
+			char charValue;
+			StringView stringValue;
 		};
+	};
+
+	enum UnaryOperator
+	{
+		UNARY_OPERATOR_INVALID = 0,
+
+		UNARY_OPERATOR_NEGATE, // -x
+
+		UNARY_OPERATOR_COUNT,
+	};
+
+	const char* UnaryOperatorToCStr(UnaryOperator op);
+	const char* UnaryOperatorToTokenCStr(UnaryOperator op);
+
+	struct UnaryExpression
+	{
+		UnaryOperator op;
+		struct Expression* operand;
+	};
+
+	enum BinaryOperator
+	{
+		BINARY_OPERATOR_INVALID = 0,
+
+		BINARY_OPERATOR_ADD, // +
+		BINARY_OPERATOR_SUB, // -
+		BINARY_OPERATOR_MUL, // *
+		BINARY_OPERATOR_DIV, // /
+		BINARY_OPERATOR_EQ,  // ==
+		BINARY_OPERATOR_NEQ, // !=
+		BINARY_OPERATOR_LT,  // <
+		BINARY_OPERATOR_GT,  // >
+		BINARY_OPERATOR_LEQ, // <=
+		BINARY_OPERATOR_GEQ, // >=
+
+		BINARY_OPERATOR_COUNT,
+	};
+
+	const char* BinaryOperatorToCStr(BinaryOperator op);
+	const char* BinaryOperatorToTokenCStr(BinaryOperator op);
+	BinaryOperator TokenTypeToBinaryOperator(TokenType tokenType);
+	bool IsBinaryOpAComparison(BinaryOperator op);
+	bool IsBinaryOpEqualityComparison(BinaryOperator op);
+	bool IsBinaryOpRelationalComparison(BinaryOperator op);
+
+	struct BinaryExpression
+	{
+		BinaryOperator op;
+		struct Expression* left;
+		struct Expression* right;
+	};
+
+	struct GroupExpression
+	{
+		struct Expression* inner;
 	};
 
 	struct IdentifierExpression
@@ -74,11 +138,50 @@ namespace Wandelt
 		struct Expression* expression;
 	};
 
+	struct IncDecExpression
+	{
+		struct Expression* operand;
+		bool isIncrement;
+		bool isPostfix;
+	};
+
 	struct CallExpression
 	{
+		struct Argument
+		{
+			StringView name;
+			Span span;
+			struct Expression* expression;
+		};
+
 		StringView functionName;
 		struct Declaration* declarationRef;
-		Vector<struct Expression*> arguments;
+		Vector<Argument> arguments;
+	};
+
+	enum AssignmentOperator
+	{
+		ASSIGNMENT_OPERATOR_INVALID = 0,
+
+		ASSIGNMENT_OPERATOR_PURE, // =
+		ASSIGNMENT_OPERATOR_ADD,  // +=
+		ASSIGNMENT_OPERATOR_SUB,  // -=
+		ASSIGNMENT_OPERATOR_MUL,  // *=
+		ASSIGNMENT_OPERATOR_DIV,  // /=
+
+		ASSIGNMENT_OPERATOR_COUNT,
+	};
+
+	const char* AssignmentOperatorToCStr(AssignmentOperator op);
+	const char* AssignmentOperatorToTokenCStr(AssignmentOperator op);
+	AssignmentOperator TokenTypeToAssignmentOperator(TokenType tokenType);
+	BinaryOperator AssignmentOperatorToBinaryOperator(AssignmentOperator op);
+
+	struct AssignmentExpression
+	{
+		AssignmentOperator op;
+		struct Expression* left;
+		struct Expression* right;
 	};
 
 	struct Expression
@@ -91,9 +194,14 @@ namespace Wandelt
 
 		union {
 			ConstantExpression constant;
+			UnaryExpression unary;
+			BinaryExpression binary;
+			GroupExpression group;
 			IdentifierExpression identifier;
 			CastExpression cast;
+			IncDecExpression incdec;
 			CallExpression call;
+			AssignmentExpression assignment;
 		};
 	};
 
@@ -131,7 +239,7 @@ namespace Wandelt
 	{
 		StringView name;
 		Type* returnType;
-		Vector<VariableDeclaration*> parameters;
+		Vector<struct Declaration*> parameters;
 		struct Statement* body;
 	};
 

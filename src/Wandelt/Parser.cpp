@@ -61,6 +61,52 @@ namespace Wandelt
 		return BuiltinTypeKindFromTokenType(type) != BUILTIN_TYPE_INVALID;
 	}
 
+	static bool IsAssignmentToken(TokenType type)
+	{
+		switch (type)
+		{
+		case TOKEN_TYPE_EQUALS:
+		case TOKEN_TYPE_PLUS_EQUAL:
+		case TOKEN_TYPE_MINUS_EQUAL:
+		case TOKEN_TYPE_STAR_EQUAL:
+		case TOKEN_TYPE_SLASH_EQUAL:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool IsBinaryOperatorToken(TokenType type)
+	{
+		switch (type)
+		{
+		case TOKEN_TYPE_PLUS:
+		case TOKEN_TYPE_MINUS:
+		case TOKEN_TYPE_STAR:
+		case TOKEN_TYPE_SLASH:
+		case TOKEN_TYPE_EQUAL_EQUAL:
+		case TOKEN_TYPE_BANG_EQUAL:
+		case TOKEN_TYPE_LESS:
+		case TOKEN_TYPE_GREATER:
+		case TOKEN_TYPE_LESS_EQUAL:
+		case TOKEN_TYPE_GREATER_EQUAL:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool IsIncDecToken(TokenType type)
+	{
+		return type == TOKEN_TYPE_PLUS_PLUS || type == TOKEN_TYPE_MINUS_MINUS;
+	}
+
+	static Precedence GetNextHigherPrecedence(Precedence precedence)
+	{
+		ASSERT(precedence < PRECEDENCE_PRIMARY);
+		return static_cast<Precedence>(static_cast<u32>(precedence) + 1u);
+	}
+
 	static bool IsStatementStarter(TokenType type)
 	{
 		switch (type)
@@ -70,6 +116,8 @@ namespace Wandelt
 		case TOKEN_TYPE_FN_KEYWORD:
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
+		case TOKEN_TYPE_PLUS_PLUS:
+		case TOKEN_TYPE_MINUS_MINUS:
 			return true;
 		default:
 			return IsBuiltinTypeKeyword(type);
@@ -123,6 +171,8 @@ namespace Wandelt
 
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
+		case TOKEN_TYPE_PLUS_PLUS:
+		case TOKEN_TYPE_MINUS_MINUS:
 			return ParseExpressionStatement();
 
 		default:
@@ -153,6 +203,8 @@ namespace Wandelt
 
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
+		case TOKEN_TYPE_PLUS_PLUS:
+		case TOKEN_TYPE_MINUS_MINUS:
 			return ParseExpressionStatement();
 
 		default:
@@ -382,6 +434,26 @@ namespace Wandelt
 		if (!ParseToken(TOKEN_TYPE_OPEN_PAREN))
 			return &s_InvalidDecl;
 
+		if (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_PAREN)
+		{
+			decl->function.parameters = Vector<Declaration*>::Create(m_DeclAllocator, 4);
+
+			while (true)
+			{
+				Declaration* parameter = nullptr;
+				if (!ParseFunctionParameter(&parameter))
+					return &s_InvalidDecl;
+
+				decl->function.parameters.Push(parameter);
+
+				if (m_Lexer->PeekToken().type != TOKEN_TYPE_COMMA)
+					break;
+
+				if (!ParseToken(TOKEN_TYPE_COMMA))
+					return &s_InvalidDecl;
+			}
+		}
+
 		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
 			return &s_InvalidDecl;
 
@@ -392,6 +464,25 @@ namespace Wandelt
 		decl->span = Span::Extend(fnToken.span, decl->function.body->span);
 
 		return decl;
+	}
+
+	bool Parser::ParseFunctionParameter(Declaration** outParameter)
+	{
+		const Token startToken = m_Lexer->PeekToken();
+
+		Declaration* parameter = m_DeclAllocator->Alloc<Declaration>();
+		parameter->type        = DECLARATION_TYPE_VARIABLE;
+
+		if (!ParseType(&parameter->variable.type))
+			return false;
+
+		const Token nameToken = m_Lexer->PeekToken();
+		if (!ParseIdentifier(&parameter->variable.name))
+			return false;
+
+		parameter->span = Span::Extend(startToken.span, nameToken.span);
+		*outParameter   = parameter;
+		return true;
 	}
 
 	Expression* Parser::ParseExpression()
@@ -409,6 +500,15 @@ namespace Wandelt
 		if (prefixRule == nullptr)
 		{
 			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected an expression, but found '{}'", TokenTypeToCStr(token.type));
+
+			// Consume non-structural tokens after diagnosing them here so recovery
+			// does not reinterpret the same token as the start of a new statement.
+			if (token.type != TOKEN_TYPE_SEMICOLON && token.type != TOKEN_TYPE_CLOSE_PAREN && token.type != TOKEN_TYPE_CLOSE_BRACE &&
+			    token.type != TOKEN_TYPE_EOF)
+			{
+				m_Lexer->EatToken();
+			}
+
 			return &s_InvalidExpr;
 		}
 
@@ -475,8 +575,55 @@ namespace Wandelt
 			expr->constant.booleanValue = (token.type == TOKEN_TYPE_TRUE);
 			break;
 
+		case TOKEN_TYPE_CHARACTER: {
+			expr->constant.kind = CONSTANT_KIND_CHAR;
+			const char* data    = lexeme.Data();
+
+			ASSERT(lexeme.Length() >= 3, "Character literal is too short");
+			ASSERT(data[0] == '\'', "Character literal must start with a single quote");
+			ASSERT(data[lexeme.Length() - 1] == '\'', "Character literal must end with a single quote");
+
+			if (data[1] != '\\')
+			{
+				expr->constant.charValue = data[1];
+			}
+			else
+			{
+				switch (data[2])
+				{
+				case 'n':
+					expr->constant.charValue = '\n';
+					break;
+				case 'r':
+					expr->constant.charValue = '\r';
+					break;
+				case 't':
+					expr->constant.charValue = '\t';
+					break;
+				case '\\':
+					expr->constant.charValue = '\\';
+					break;
+				case '\'':
+					expr->constant.charValue = '\'';
+					break;
+				case '0':
+					expr->constant.charValue = '\0';
+					break;
+				default:
+					ASSERT(false, "Unhandled character escape sequence");
+					break;
+				}
+			}
+
+			break;
+		}
+
+		case TOKEN_TYPE_STRING:
+			expr->constant.kind        = CONSTANT_KIND_STRING;
+			expr->constant.stringValue = StringView{lexeme.Data() + 1, lexeme.Length() - 2};
+			break;
+
 		default:
-			ASSERT(false, "unhandled constant token type");
 			return &s_InvalidExpr;
 		}
 
@@ -510,6 +657,92 @@ namespace Wandelt
 		}
 
 		m_Lexer->EatToken();
+
+		return expr;
+	}
+
+	Expression* Parser::ParseUnaryExpression()
+	{
+		const Token operatorToken = m_Lexer->PeekToken();
+
+		UnaryOperator op = UNARY_OPERATOR_INVALID;
+		switch (operatorToken.type)
+		{
+		case TOKEN_TYPE_MINUS:
+			op = UNARY_OPERATOR_NEGATE;
+			break;
+
+		default:
+			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected a unary operator, but found '{}'",
+			                           TokenTypeToCStr(operatorToken.type));
+			return &s_InvalidExpr;
+		}
+
+		m_Lexer->EatToken();
+
+		Expression* operand = ParseExpressionWithPrecedence(PRECEDENCE_PREFIX);
+		if (operand->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_UNARY;
+		expr->span       = Span::Extend(operatorToken.span, operand->span);
+
+		expr->unary.op      = op;
+		expr->unary.operand = operand;
+
+		return expr;
+	}
+
+	Expression* Parser::ParseBinaryExpression(Expression* left)
+	{
+		ASSERT(left != nullptr);
+
+		const Token operatorToken = m_Lexer->PeekToken();
+		if (!IsBinaryOperatorToken(operatorToken.type))
+		{
+			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected a binary operator, but found '{}'",
+			                           TokenTypeToCStr(operatorToken.type));
+			return &s_InvalidExpr;
+		}
+
+		const Precedence precedence = s_ParseRules[operatorToken.type].precedence;
+		m_Lexer->EatToken();
+
+		Expression* right = ParseExpressionWithPrecedence(GetNextHigherPrecedence(precedence));
+		if (right->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_BINARY;
+		expr->span       = Span::Extend(left->span, right->span);
+
+		expr->binary.op    = TokenTypeToBinaryOperator(operatorToken.type);
+		expr->binary.left  = left;
+		expr->binary.right = right;
+
+		return expr;
+	}
+
+	Expression* Parser::ParseGroupExpression()
+	{
+		const Token openParen = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_OPEN_PAREN))
+			return &s_InvalidExpr;
+
+		Expression* inner = ParseExpression();
+		if (inner->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		const Token closeParen = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_GROUP;
+		expr->span       = Span::Extend(openParen.span, closeParen.span);
+
+		expr->group.inner = inner;
 
 		return expr;
 	}
@@ -558,6 +791,58 @@ namespace Wandelt
 		return expr;
 	}
 
+	Expression* Parser::ParsePrefixIncDecExpression()
+	{
+		const Token operatorToken = m_Lexer->PeekToken();
+		if (!IsIncDecToken(operatorToken.type))
+		{
+			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected '++' or '--', but found '{}'",
+			                           TokenTypeToCStr(operatorToken.type));
+			return &s_InvalidExpr;
+		}
+
+		m_Lexer->EatToken();
+
+		Expression* operand = ParseExpressionWithPrecedence(PRECEDENCE_PREFIX);
+		if (operand->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_INCDEC;
+		expr->span       = Span::Extend(operatorToken.span, operand->span);
+
+		expr->incdec.operand     = operand;
+		expr->incdec.isIncrement = operatorToken.type == TOKEN_TYPE_PLUS_PLUS;
+		expr->incdec.isPostfix   = false;
+
+		return expr;
+	}
+
+	Expression* Parser::ParsePostfixIncDecExpression(Expression* left)
+	{
+		ASSERT(left != nullptr);
+
+		const Token operatorToken = m_Lexer->PeekToken();
+		if (!IsIncDecToken(operatorToken.type))
+		{
+			m_Diagnostics->ReportError(operatorToken.span, m_Lexer->GetFile(), "Expected '++' or '--', but found '{}'",
+			                           TokenTypeToCStr(operatorToken.type));
+			return &s_InvalidExpr;
+		}
+
+		m_Lexer->EatToken();
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_INCDEC;
+		expr->span       = Span::Extend(left->span, operatorToken.span);
+
+		expr->incdec.operand     = left;
+		expr->incdec.isIncrement = operatorToken.type == TOKEN_TYPE_PLUS_PLUS;
+		expr->incdec.isPostfix   = true;
+
+		return expr;
+	}
+
 	Expression* Parser::ParseCallExpression(Expression* left)
 	{
 		if (left->type != EXPRESSION_TYPE_IDENTIFIER)
@@ -574,11 +859,114 @@ namespace Wandelt
 		expr->type              = EXPRESSION_TYPE_CALL;
 		expr->call.functionName = left->identifier.name;
 
+		if (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_PAREN)
+		{
+			expr->call.arguments = Vector<CallExpression::Argument>::Create(m_ExprAllocator, 4);
+
+			bool sawNamedArgument      = false;
+			bool sawPositionalArgument = false;
+
+			while (true)
+			{
+				CallExpression::Argument argument = {};
+				bool isNamedArgument              = false;
+				if (!ParseCallArgument(&argument, &isNamedArgument))
+					return &s_InvalidExpr;
+
+				if (isNamedArgument)
+				{
+					if (sawPositionalArgument)
+					{
+						m_Diagnostics->ReportError(argument.span, m_Lexer->GetFile(), "Cannot mix positional and named arguments in the same call");
+						return &s_InvalidExpr;
+					}
+
+					sawNamedArgument = true;
+				}
+				else
+				{
+					if (sawNamedArgument)
+					{
+						m_Diagnostics->ReportError(argument.span, m_Lexer->GetFile(), "Cannot mix positional and named arguments in the same call");
+						return &s_InvalidExpr;
+					}
+
+					sawPositionalArgument = true;
+				}
+
+				expr->call.arguments.Push(argument);
+
+				if (m_Lexer->PeekToken().type != TOKEN_TYPE_COMMA)
+					break;
+
+				if (!ParseToken(TOKEN_TYPE_COMMA))
+					return &s_InvalidExpr;
+			}
+		}
+
 		const Token closeParen = m_Lexer->PeekToken();
 		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
 			return &s_InvalidExpr;
 
 		expr->span = Span::Extend(left->span, closeParen.span);
+
+		return expr;
+	}
+
+	bool Parser::ParseCallArgument(CallExpression::Argument* outArgument, bool* outIsNamed)
+	{
+		ASSERT(outArgument != nullptr);
+		ASSERT(outIsNamed != nullptr);
+
+		*outIsNamed = false;
+
+		if (m_Lexer->PeekToken().type == TOKEN_TYPE_IDENTIFIER && m_Lexer->PeekTokenAtOffset(1).type == TOKEN_TYPE_EQUALS)
+		{
+			const Token nameToken = m_Lexer->PeekToken();
+			if (!ParseIdentifier(&outArgument->name))
+				return false;
+
+			if (!ParseToken(TOKEN_TYPE_EQUALS))
+				return false;
+
+			outArgument->expression = ParseExpression();
+			if (outArgument->expression->type == EXPRESSION_TYPE_INVALID)
+				return false;
+
+			outArgument->span = Span::Extend(nameToken.span, outArgument->expression->span);
+			*outIsNamed       = true;
+			return true;
+		}
+
+		outArgument->expression = ParseExpression();
+		if (outArgument->expression->type == EXPRESSION_TYPE_INVALID)
+			return false;
+
+		outArgument->span = outArgument->expression->span;
+		return true;
+	}
+
+	Expression* Parser::ParseAssignmentExpression(Expression* left)
+	{
+		ASSERT(left != nullptr);
+
+		const Token operatorToken = m_Lexer->PeekToken();
+		if (!IsAssignmentToken(operatorToken.type))
+			return left;
+
+		m_Lexer->EatToken();
+
+		Expression* right = ParseExpressionWithPrecedence(PRECEDENCE_ASSIGNMENT);
+		if (right->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_ASSIGNMENT;
+		expr->span       = Span::Extend(left->span, right->span);
+
+		expr->assignment.op    = TokenTypeToAssignmentOperator(operatorToken.type);
+		expr->assignment.left  = left;
+		expr->assignment.right = right;
 
 		return expr;
 	}
@@ -710,6 +1098,9 @@ namespace Wandelt
 		return true;
 	}
 
+	static_assert(TOKEN_TYPE_COUNT == 62,
+	              "If you add a new token type, make sure to update the parse rules table below IN PROPER ORDER otherwise all hell will break loose");
+
 	// Rows = token type, each row = {prefix, infix, precedence}.
 	const ParseRule Parser::s_ParseRules[TOKEN_TYPE_COUNT] = {
 	    /* INVALID              */ {nullptr, nullptr, PRECEDENCE_NONE},
@@ -742,15 +1133,34 @@ namespace Wandelt
 	    /* CSTRING_KEYWORD      */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* RAWPTR_KEYWORD       */ {nullptr, nullptr, PRECEDENCE_NONE},
 
-	    /* OPEN_PAREN           */ {nullptr, &Parser::ParseCallExpression, PRECEDENCE_POSTFIX},
+	    /* OPEN_PAREN           */ {&Parser::ParseGroupExpression, &Parser::ParseCallExpression, PRECEDENCE_POSTFIX},
 	    /* CLOSE_PAREN          */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* OPEN_BRACE           */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* CLOSE_BRACE          */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* SEMICOLON            */ {nullptr, nullptr, PRECEDENCE_NONE},
-	    /* EQUALS               */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* COMMA                */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* DOT                  */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* EQUALS               */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
+	    /* PLUS                 */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_ADDITIVE},
+	    /* MINUS                */ {&Parser::ParseUnaryExpression, &Parser::ParseBinaryExpression, PRECEDENCE_ADDITIVE},
+	    /* STAR                 */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_MULTIPLICATIVE},
+	    /* SLASH                */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_MULTIPLICATIVE},
+	    /* GREATER              */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
+	    /* LESS                 */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
+	    /* SINGLE_QUOTE         */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* DOUBLE_QUOTE         */ {nullptr, nullptr, PRECEDENCE_NONE},
 
 	    /* BANG_BANG            */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* GREATER_EQUAL        */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
+	    /* LESS_EQUAL           */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
+	    /* EQUAL_EQUAL          */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_EQUALITY},
+	    /* BANG_EQUAL           */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_EQUALITY},
+	    /* PLUS_EQUAL           */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
+	    /* MINUS_EQUAL          */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
+	    /* STAR_EQUAL           */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
+	    /* SLASH_EQUAL          */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
+	    /* PLUS_PLUS            */ {&Parser::ParsePrefixIncDecExpression, &Parser::ParsePostfixIncDecExpression, PRECEDENCE_POSTFIX},
+	    /* MINUS_MINUS          */ {&Parser::ParsePrefixIncDecExpression, &Parser::ParsePostfixIncDecExpression, PRECEDENCE_POSTFIX},
 
 	    /* IDENTIFIER           */ {&Parser::ParseIdentifierExpression, nullptr, PRECEDENCE_NONE},
 	    /* INTEGER              */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
@@ -758,6 +1168,8 @@ namespace Wandelt
 	    /* DOUBLE               */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
 	    /* TRUE                 */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
 	    /* FALSE                */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
+	    /* CHARACTER            */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
+	    /* STRING               */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
 
 	    /* EOF                  */ {nullptr, nullptr, PRECEDENCE_NONE},
 	};

@@ -30,6 +30,8 @@ namespace Wandelt
 		Token CreateNewToken(TokenType type);
 		Token LexIdentifierOrKeyword();
 		Token LexDigit(char firstChar);
+		Token LexCharacterLiteral();
+		Token LexStringLiteral();
 		Token LexToken();
 
 	private:

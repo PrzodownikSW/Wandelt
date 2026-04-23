@@ -50,9 +50,15 @@ namespace Wandelt
 		bool AnalyzeExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeExpressionInternal(Expression* expr, Type* typeHint);
 		bool AnalyzeConstantExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeUnaryExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeBinaryExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeGroupExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeIdentifierExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCastExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeIncDecExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCallExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeAssignmentExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeCallArgument(Expression** argumentExpression, Declaration* parameterDecl);
 
 		Expression* InjectCast(Expression* inner, Type* target);
 

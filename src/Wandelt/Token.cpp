@@ -101,14 +101,71 @@ namespace Wandelt
 		case TOKEN_TYPE_SEMICOLON:
 			return ";";
 
-		case TOKEN_TYPE_EQUALS:
-			return "=";
+		case TOKEN_TYPE_COMMA:
+			return ",";
 
 		case TOKEN_TYPE_DOT:
 			return ".";
 
+		case TOKEN_TYPE_EQUALS:
+			return "=";
+
+		case TOKEN_TYPE_PLUS:
+			return "+";
+
+		case TOKEN_TYPE_MINUS:
+			return "-";
+
+		case TOKEN_TYPE_STAR:
+			return "*";
+
+		case TOKEN_TYPE_SLASH:
+			return "/";
+
+		case TOKEN_TYPE_GREATER:
+			return ">";
+
+		case TOKEN_TYPE_LESS:
+			return "<";
+
+		case TOKEN_TYPE_SINGLE_QUOTE:
+			return "'";
+
+		case TOKEN_TYPE_DOUBLE_QUOTE:
+			return "\"";
+
 		case TOKEN_TYPE_BANG_BANG:
 			return "!!";
+
+		case TOKEN_TYPE_GREATER_EQUAL:
+			return ">=";
+
+		case TOKEN_TYPE_LESS_EQUAL:
+			return "<=";
+
+		case TOKEN_TYPE_EQUAL_EQUAL:
+			return "==";
+
+		case TOKEN_TYPE_BANG_EQUAL:
+			return "!=";
+
+		case TOKEN_TYPE_PLUS_EQUAL:
+			return "+=";
+
+		case TOKEN_TYPE_MINUS_EQUAL:
+			return "-=";
+
+		case TOKEN_TYPE_STAR_EQUAL:
+			return "*=";
+
+		case TOKEN_TYPE_SLASH_EQUAL:
+			return "/=";
+
+		case TOKEN_TYPE_PLUS_PLUS:
+			return "++";
+
+		case TOKEN_TYPE_MINUS_MINUS:
+			return "--";
 
 		case TOKEN_TYPE_IDENTIFIER:
 			return "<identifier>";
@@ -128,17 +185,20 @@ namespace Wandelt
 		case TOKEN_TYPE_FALSE:
 			return "false";
 
+		case TOKEN_TYPE_CHARACTER:
+			return "<character>";
+
+		case TOKEN_TYPE_STRING:
+			return "<string>";
+
 		case TOKEN_TYPE_EOF:
 			return "<eof>";
 
 		case TOKEN_TYPE_COUNT:
 			ASSERT(false, "Invalid token type!");
-
-		default:
-			break;
 		}
 
-		UNREACHABLE();
+		ASSERT(false);
 	}
 
 	Span Span::Extend(Span a, Span b)

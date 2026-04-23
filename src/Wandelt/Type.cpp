@@ -112,6 +112,9 @@ namespace Wandelt
 #define IMPL CAST_KIND_IMPLICIT
 #define EXPL CAST_KIND_EXPLICIT
 
+	static_assert(BUILTIN_TYPE_COUNT == 21,
+	              "If you add a new builtin type, make sure to update the cast matrix below IN PROPER ORDER otherwise all hell will break loose");
+
 	// Rows = from-type, cols = to-type.
 	static constexpr CastKind s_CastMatrix[BUILTIN_TYPE_COUNT][BUILTIN_TYPE_COUNT] = {
 	    //             INV   VOID  BOOL  CHAR  SHORT INT   LONG  SZ    IPTR  UCHR  USHT  UINT  ULNG  USZ   UIPT  ABINT FLT   DBL   STR   CSTR  RPTR
@@ -245,6 +248,10 @@ namespace Wandelt
 
 		UNREACHABLE();
 	}
+
+	static_assert(
+	    BUILTIN_TYPE_COUNT == 21,
+	    "If you add a new builtin type, make sure to update the g_builtinTypes array below IN PROPER ORDER otherwise all hell will break loose");
 
 	// no array designators in c++ ...
 	static constinit Type g_builtinTypes[BUILTIN_TYPE_COUNT] = {

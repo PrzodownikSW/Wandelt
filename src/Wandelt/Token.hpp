@@ -41,16 +41,35 @@ namespace Wandelt
 		TOKEN_TYPE_RAWPTR_KEYWORD,  // 'rawptr'
 
 		// Single-character tokens
-		TOKEN_TYPE_OPEN_PAREN,  //  (
-		TOKEN_TYPE_CLOSE_PAREN, //  )
-		TOKEN_TYPE_OPEN_BRACE,  //  {
-		TOKEN_TYPE_CLOSE_BRACE, //  }
-		TOKEN_TYPE_SEMICOLON,   //  ;
-		TOKEN_TYPE_EQUALS,      //  =
-		TOKEN_TYPE_DOT,         //  .
+		TOKEN_TYPE_OPEN_PAREN,   //  (
+		TOKEN_TYPE_CLOSE_PAREN,  //  )
+		TOKEN_TYPE_OPEN_BRACE,   //  {
+		TOKEN_TYPE_CLOSE_BRACE,  //  }
+		TOKEN_TYPE_SEMICOLON,    //  ;
+		TOKEN_TYPE_COMMA,        //  ,
+		TOKEN_TYPE_DOT,          //  .
+		TOKEN_TYPE_EQUALS,       //  =
+		TOKEN_TYPE_PLUS,         //  +
+		TOKEN_TYPE_MINUS,        //  -
+		TOKEN_TYPE_STAR,         //  *
+		TOKEN_TYPE_SLASH,        //  /
+		TOKEN_TYPE_GREATER,      //  >
+		TOKEN_TYPE_LESS,         //  <
+		TOKEN_TYPE_SINGLE_QUOTE, //  '
+		TOKEN_TYPE_DOUBLE_QUOTE, //  "
 
 		// Double-character tokens
-		TOKEN_TYPE_BANG_BANG, //  !!
+		TOKEN_TYPE_BANG_BANG,     //  !!
+		TOKEN_TYPE_GREATER_EQUAL, //  >=
+		TOKEN_TYPE_LESS_EQUAL,    //  <=
+		TOKEN_TYPE_EQUAL_EQUAL,   //  ==
+		TOKEN_TYPE_BANG_EQUAL,    //  !=
+		TOKEN_TYPE_PLUS_EQUAL,    //  +=
+		TOKEN_TYPE_MINUS_EQUAL,   //  -=
+		TOKEN_TYPE_STAR_EQUAL,    //  *=
+		TOKEN_TYPE_SLASH_EQUAL,   //  /=
+		TOKEN_TYPE_PLUS_PLUS,     //  ++
+		TOKEN_TYPE_MINUS_MINUS,   //  --
 
 		// Literals
 		TOKEN_TYPE_IDENTIFIER, // ident
@@ -59,6 +78,8 @@ namespace Wandelt
 		TOKEN_TYPE_DOUBLE,     // 3.14d, 3.d, .14d
 		TOKEN_TYPE_TRUE,       // 'true'
 		TOKEN_TYPE_FALSE,      // 'false'
+		TOKEN_TYPE_CHARACTER,  // 'a', '\n', etc.
+		TOKEN_TYPE_STRING,     // "hello world"
 
 		// Other
 		TOKEN_TYPE_EOF,

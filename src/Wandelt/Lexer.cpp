@@ -310,6 +310,104 @@ namespace Wandelt
 		return CreateNewToken(type);
 	}
 
+	Token Lexer::LexCharacterLiteral()
+	{
+		if (IsEOF() || IsAtNewline())
+		{
+			Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+			m_Diagnostics->ReportError(error.span, m_File, "Unterminated character literal, expected closing '\\''.");
+			return error;
+		}
+
+		if (GetCurrentChar() == '\'')
+		{
+			Advance(); // consume closing quote
+
+			Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+			m_Diagnostics->ReportError(error.span, m_File,
+			                           "Invalid character literal, expected exactly one character or escape sequence between quotes.");
+			return error;
+		}
+
+		if (GetCurrentChar() == '\\')
+		{
+			Advance(); // consume '\'
+
+			if (IsEOF() || IsAtNewline())
+			{
+				Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+				m_Diagnostics->ReportError(error.span, m_File, "Unterminated character literal, expected closing '\\''.");
+				return error;
+			}
+
+			Advance(); // consume escaped character
+		}
+		else
+		{
+			Advance(); // consume literal character
+		}
+
+		if (GetCurrentChar() == '\'')
+		{
+			Advance(); // consume closing quote
+			return CreateNewToken(TOKEN_TYPE_CHARACTER);
+		}
+
+		while (!IsEOF() && !IsAtNewline() && GetCurrentChar() != '\'')
+		{
+			Advance();
+		}
+
+		if (GetCurrentChar() == '\'')
+		{
+			Advance(); // consume closing quote
+
+			Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+			m_Diagnostics->ReportError(error.span, m_File,
+			                           "Invalid character literal, expected exactly one character or escape sequence between quotes.");
+			return error;
+		}
+
+		Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+
+		m_Diagnostics->ReportError(error.span, m_File, "Unterminated character literal, expected closing '\\''.");
+
+		return error;
+	}
+
+	Token Lexer::LexStringLiteral()
+	{
+		while (true)
+		{
+			if (IsEOF() || IsAtNewline())
+			{
+				Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+				m_Diagnostics->ReportError(error.span, m_File, "Unterminated string literal, expected closing '\"'.");
+				return error;
+			}
+
+			if (GetCurrentChar() == '"')
+			{
+				Advance(); // consume closing quote
+				return CreateNewToken(TOKEN_TYPE_STRING);
+			}
+
+			if (GetCurrentChar() == '\\')
+			{
+				Advance(); // consume '\'
+
+				if (IsEOF() || IsAtNewline())
+				{
+					Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+					m_Diagnostics->ReportError(error.span, m_File, "Unterminated string literal, expected closing '\"'.");
+					return error;
+				}
+			}
+
+			Advance();
+		}
+	}
+
 	Token Lexer::LexToken()
 	{
 		SkipWhitespace();
@@ -377,8 +475,8 @@ namespace Wandelt
 			token = CreateNewToken(TOKEN_TYPE_SEMICOLON);
 			break;
 
-		case '=':
-			token = CreateNewToken(TOKEN_TYPE_EQUALS);
+		case ',':
+			token = CreateNewToken(TOKEN_TYPE_COMMA);
 			break;
 
 		case '.':
@@ -394,11 +492,116 @@ namespace Wandelt
 			}
 			break;
 
+		case '=':
+			if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_EQUAL_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_EQUALS);
+			}
+			break;
+
+		case '+':
+			if (GetCurrentChar() == '+')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_PLUS_PLUS);
+			}
+			else if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_PLUS_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_PLUS);
+			}
+			break;
+
+		case '-':
+			if (GetCurrentChar() == '-')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_MINUS_MINUS);
+			}
+			else if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_MINUS_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_MINUS);
+			}
+			break;
+
+		case '*':
+			if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_STAR_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_STAR);
+			}
+			break;
+
+		case '/':
+			if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_SLASH_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_SLASH);
+			}
+			break;
+
+		case '>':
+			if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_GREATER_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_GREATER);
+			}
+			break;
+
+		case '<':
+			if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_LESS_EQUAL);
+			}
+			else
+			{
+				token = CreateNewToken(TOKEN_TYPE_LESS);
+			}
+			break;
+
+		case '\'':
+			return LexCharacterLiteral();
+
+		case '"':
+			return LexStringLiteral();
+
 		case '!':
 			if (GetCurrentChar() == '!')
 			{
 				Advance();
 				token = CreateNewToken(TOKEN_TYPE_BANG_BANG);
+			}
+			else if (GetCurrentChar() == '=')
+			{
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_BANG_EQUAL);
 			}
 			else
 			{

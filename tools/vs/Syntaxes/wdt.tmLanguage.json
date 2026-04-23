@@ -4,6 +4,7 @@
 	"scopeName": "source.wdt",
 	"fileTypes": ["wdt"],
 	"patterns": [
+		{ "include": "#strings" },
 		{ "include": "#comments" },
 		{ "include": "#directives" },
 		{ "include": "#keywords" },
@@ -15,6 +16,46 @@
 		{ "include": "#punctuation" }
 	],
 	"repository": {
+		"strings": {
+			"patterns": [
+				{
+					"name": "string.quoted.double.wdt",
+					"begin": "\"",
+					"beginCaptures": {
+						"0": { "name": "punctuation.definition.string.begin.wdt" }
+					},
+					"end": "\"",
+					"endCaptures": {
+						"0": { "name": "punctuation.definition.string.end.wdt" }
+					},
+					"patterns": [
+						{ "include": "#escapes" }
+					]
+				},
+				{
+					"name": "constant.character.wdt",
+					"begin": "'",
+					"beginCaptures": {
+						"0": { "name": "punctuation.definition.character.begin.wdt" }
+					},
+					"end": "'",
+					"endCaptures": {
+						"0": { "name": "punctuation.definition.character.end.wdt" }
+					},
+					"patterns": [
+						{ "include": "#escapes" }
+					]
+				}
+			]
+		},
+		"escapes": {
+			"patterns": [
+				{
+					"name": "constant.character.escape.wdt",
+					"match": "\\\\[nrt0'\"\\\\]"
+				}
+			]
+		},
 		"comments": {
 			"patterns": [
 				{

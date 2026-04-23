@@ -11,17 +11,45 @@ package example #entrypoint;
 	*>
 *>
 
+fn int test_1(int x, int y)
+{
+	int res = (x + y) * 2;
+
+	return res;
+}
+
+discard test_1(12, 15);
+discard test_1(y = 12, x = 12);
+
 fn int test()
 {
 	return 120;
 }
 
+// struct Vector2
+// {
+// 	float x = 0;
+// 	float y = 0;
+// }
+
+// fn float Vector2.length()
+// {
+// 	return std.sqrt(x * x + y * y);
+// }
+
+// Vector2 v = { x = 3, y = 4 };
+// float len = inline v.length();
+
 fn int main()
 {
+	char c = 'a';
+	string s = "Hello, World!";
+	cstring cs = "CString";
+
 	int x = 12;
 	usz y = 15;
 	float z = 270;
-	float xx = cast(float)x;
+	float xx = cast(float) x;
 	long value = 5000000000;
 
 	long ret = test();

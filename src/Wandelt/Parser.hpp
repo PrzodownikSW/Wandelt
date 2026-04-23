@@ -17,7 +17,13 @@ namespace Wandelt
 	{
 		PRECEDENCE_NONE = 0,
 
-		PRECEDENCE_POSTFIX, // call()
+		PRECEDENCE_ASSIGNMENT,     // =, +=, -=, *=, /=, %=
+		PRECEDENCE_EQUALITY,       // ==, !=
+		PRECEDENCE_COMPARISON,     // <, >, <=, >=
+		PRECEDENCE_ADDITIVE,       // +, -
+		PRECEDENCE_MULTIPLICATIVE, // *, /, %
+		PRECEDENCE_PREFIX,         // -x, !x, ++x, --x
+		PRECEDENCE_POSTFIX,        // call(), x++, x--
 		PRECEDENCE_PRIMARY,
 
 		PRECEDENCE_COUNT
@@ -65,13 +71,21 @@ namespace Wandelt
 		Declaration* ParsePackageDeclaration();
 		Declaration* ParseVariableDeclaration();
 		Declaration* ParseFunctionDeclaration();
+		bool ParseFunctionParameter(Declaration** outParameter);
 
 		Expression* ParseExpression();
 		Expression* ParseExpressionWithPrecedence(Precedence minPrecedence);
 		Expression* ParseConstantExpression();
+		Expression* ParseUnaryExpression();
+		Expression* ParseBinaryExpression(Expression* left);
+		Expression* ParseGroupExpression();
 		Expression* ParseIdentifierExpression();
 		Expression* ParseCastExpression();
+		Expression* ParsePrefixIncDecExpression();
+		Expression* ParsePostfixIncDecExpression(Expression* left);
 		Expression* ParseCallExpression(Expression* left);
+		bool ParseCallArgument(CallExpression::Argument* outArgument, bool* outIsNamed);
+		Expression* ParseAssignmentExpression(Expression* left);
 
 		void RecoverFromError(ParseScope scope);
 

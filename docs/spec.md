@@ -99,6 +99,8 @@ rawptr
 
 `char` is 8-bit, `short` is 16-bit, `int` is 32-bit, `long` is 64-bit. All integer sizes are fixed.
 
+`char` is a signed 8-bit integer type. It is used both as the smallest signed integer type and as the type of character literals.
+
 `sz` and `usz` are signed and unsigned platform-sized types used for indexing and lengths.
 
 > [!NOTE]
@@ -107,7 +109,12 @@ rawptr
 `intptr` and `uintptr` are signed and unsigned pointer-sized integer types, used for storing raw pointer values as integers.
 
 > [!NOTE]
-> The `string` type stores the pointer to the data and the length of the string. `cstring` is used to interface with foreign libraries written in/for C that use zero-terminated strings.
+> The `string` type is represented internally as a data pointer plus a length.
+> The `cstring` type is represented internally as a pointer to null-terminated character data.
+
+`string` is the language's normal string type. It may contain embedded zero bytes because its length is tracked separately.
+
+`cstring` is intended for C interoperability and other APIs that expect a terminating `\0` byte.
 
 ## Default values
 
@@ -143,6 +150,38 @@ Literal typing is context-sensitive.
 Floating-point literals with an `f` suffix have type `float`.
 
 Floating-point literals with a `d` suffix have type `double`.
+
+### Character literals
+
+Character literals are written in single quotes:
+
+```c
+'a'
+'\n'
+'\\'
+'\''
+```
+
+Character literals have type `char`.
+
+A character literal must contain exactly one character or one escape sequence.
+
+### String literals
+
+String literals are written in double quotes:
+
+```c
+""
+"hello"
+"line\n"
+```
+
+String literals are context-sensitive:
+
+* if the expected type is `cstring`, the literal takes type `cstring`
+* otherwise, the literal takes type `string`
+
+The source form may contain escape sequences. The empty string literal `""` is valid.
 
 ### Integer literals
 
@@ -213,29 +252,128 @@ There are no normal `cast(T)` conversions involving `string`, `cstring`, or `raw
 
 * `true` and `false` are the boolean constants of type `bool`.
 
-# Functions
+# Expressions
 
-A function declaration introduces a named callable with a fixed return type and a body. Functions are declared with the `fn` keyword, followed by the return type, the function name, a parameter list in parentheses, and a body enclosed in braces:
+A grouped expression has the same type as the expression inside it.
+
+## Unary negation
+
+Unary `-` negates an arithmetic value:
 
 ```c
-fn int main()
-{
-    int x = 12;
-    usz y = 15;
+int x = -12;
+float y = -value;
+```
 
-    return y;
+The operand must have an arithmetic type. The result has the same type as the operand.
+
+## Binary operators
+
+The following binary operators are currently defined:
+
+* arithmetic: `+`, `-`, `*`, `/`
+* equality: `==`, `!=`
+* ordering: `<`, `<=`, `>`, `>=`
+
+Arithmetic operators require arithmetic operands. If the operands have different arithmetic types, the compiler first finds a common type both operands can implicitly convert to, then performs the operation in that type.
+
+```c
+double x = 1 + 2.5d;
+int y = 8 / 2;
+```
+
+Equality operators produce a `bool` result. They are valid when both operands already have the same type, or when both operands are arithmetic and can be converted to a common arithmetic type.
+
+Ordering operators produce a `bool` result and require arithmetic operands.
+
+## Operator precedence
+
+From highest to lowest precedence:
+
+* postfix `expr++`, `expr--`, and calls
+* prefix unary `-`, `++expr`, `--expr`
+* `*`, `/`
+* `+`, `-`
+* `<`, `<=`, `>`, `>=`
+* `==`, `!=`
+* assignments
+
+Binary arithmetic, equality, and ordering operators associate left-to-right.
+
+## Grouping
+
+Parentheses may be used to group an expression and override normal operator precedence:
+
+```c
+int x = (1 + 2) * 3;
+```
+
+## Increment and decrement
+
+Wandelt supports both prefix and postfix increment and decrement:
+
+```c
+++x;
+y--;
+```
+
+The operand must be a variable of arithmetic type. These expressions mutate the operand in place and have the same type as the operand.
+
+## Assignment
+
+Wandelt supports simple and compound assignment:
+
+* `=`
+* `+=`, `-=`, `*=`, `/=`
+
+The left-hand side of an assignment must be a variable.
+
+For simple assignment, the right-hand side must have the same type as the target variable or be implicitly convertible to it:
+
+```c
+long x = 0;
+x = 12;
+```
+
+For compound assignment, the operation is checked as an arithmetic update of the left-hand side followed by assignment back to the original variable type.
+
+```c
+int x = 10;
+x += 2;
+x *= 3;
+```
+
+An assignment expression has type `void`.
+
+Because assignment has type `void`, chained assignments such as `a = b = c;` are not valid language-level expressions.
+
+# Functions
+
+A function declaration introduces a named callable with a fixed return type and a body. Functions are declared with the `fn` keyword, followed by the return type, the function name, a parameter list in parentheses, and a body enclosed in braces. Each parameter is written as a type followed by a name:
+
+```c
+fn int add(int x, int y)
+{
+    return x;
 }
 ```
+
+Parameter names are part of the function signature at the source level and may be used by named arguments at the call site.
 
 The body is a sequence of statements. A function with a non-`void` return type must end its execution with a `return` statement that yields a value of the declared return type.
 
 ## Calling functions
 
-A function is called by writing its name followed by an argument list in parentheses. A call may appear as an expression or as a top-level statement in the entrypoint package:
+A function is called by writing its name followed by an argument list in parentheses. Arguments may be passed positionally or by parameter name:
 
 ```c
-return main();
+return add(12, 15);
+return add(y = 15, x = 12);
 ```
+
+Positional arguments bind by order. Named arguments bind by parameter name and may appear in any order. A single call must use exactly one style: positional or named arguments cannot be mixed.
+
+A call may appear as an expression or as a top-level statement in the entrypoint package.
 
 ## Discarding return values
 

@@ -87,8 +87,10 @@ namespace Wandelt
 
 		const SingleTokenCase cases[] = {
 		    {"(", TOKEN_TYPE_OPEN_PAREN, "("},  {")", TOKEN_TYPE_CLOSE_PAREN, ")"}, {"{", TOKEN_TYPE_OPEN_BRACE, "{"},
-		    {"}", TOKEN_TYPE_CLOSE_BRACE, "}"}, {";", TOKEN_TYPE_SEMICOLON, ";"},   {"=", TOKEN_TYPE_EQUALS, "="},
-		    {".", TOKEN_TYPE_DOT, "."},
+		    {"}", TOKEN_TYPE_CLOSE_BRACE, "}"}, {";", TOKEN_TYPE_SEMICOLON, ";"},   {",", TOKEN_TYPE_COMMA, ","},
+		    {"=", TOKEN_TYPE_EQUALS, "="},      {".", TOKEN_TYPE_DOT, "."},         {"+", TOKEN_TYPE_PLUS, "+"},
+		    {"-", TOKEN_TYPE_MINUS, "-"},       {"*", TOKEN_TYPE_STAR, "*"},        {"/", TOKEN_TYPE_SLASH, "/"},
+		    {">", TOKEN_TYPE_GREATER, ">"},     {"<", TOKEN_TYPE_LESS, "<"},
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -198,9 +200,8 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const char* cases[] = {
-		    "packageName", "returnValue", "castValue", "boolish",  "trueValue",  "false_alarm", "uintptr2",
-		    "rawptrValue", "discarded",   "intish",    "intptrly", "longish",    "doublish",    "shortish",
-		    "charish",     "stringish",   "floatish",  "voidish",  "rawptrish",
+		    "packageName", "returnValue", "castValue", "boolish",  "trueValue", "false_alarm", "uintptr2", "rawptrValue", "discarded", "intish",
+		    "intptrly",    "longish",     "doublish",  "shortish", "charish",   "stringish",   "floatish", "voidish",     "rawptrish",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -271,7 +272,60 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const SingleTokenCase cases[] = {
-		    {"!!", TOKEN_TYPE_BANG_BANG, "!!"},
+		    {"!!", TOKEN_TYPE_BANG_BANG, "!!"},   {">=", TOKEN_TYPE_GREATER_EQUAL, ">="}, {"<=", TOKEN_TYPE_LESS_EQUAL, "<="},
+		    {"==", TOKEN_TYPE_EQUAL_EQUAL, "=="}, {"!=", TOKEN_TYPE_BANG_EQUAL, "!="},    {"+=", TOKEN_TYPE_PLUS_EQUAL, "+="},
+		    {"-=", TOKEN_TYPE_MINUS_EQUAL, "-="}, {"*=", TOKEN_TYPE_STAR_EQUAL, "*="},    {"/=", TOKEN_TYPE_SLASH_EQUAL, "/="},
+		    {"++", TOKEN_TYPE_PLUS_PLUS, "++"},   {"--", TOKEN_TYPE_MINUS_MINUS, "--"},
+		};
+
+		for (u32 index = 0; index < ArraySize(cases); index++)
+		{
+			const SingleTokenCase& testCase = cases[index];
+			TokenList tokens                = LexSource(alloc, testCase.source, &diag);
+
+			ASSERT_FALSE(tokens.truncated);
+			ASSERT_EQ(tokens.count, 2);
+			ASSERT_EQ(tokens.items[0].type, testCase.type);
+			ASSERT_STR_EQ(TokenLexeme(testCase.source, tokens.items[0]), testCase.lexeme);
+			ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		}
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(CharacterLiterals)
+	{
+		Diagnostics diag;
+
+		const SingleTokenCase cases[] = {
+		    {"'x'", TOKEN_TYPE_CHARACTER, "'x'"},
+		    {"'\\n'", TOKEN_TYPE_CHARACTER, "'\\n'"},
+		    {"'\\\\'", TOKEN_TYPE_CHARACTER, "'\\\\'"},
+		};
+
+		for (u32 index = 0; index < ArraySize(cases); index++)
+		{
+			const SingleTokenCase& testCase = cases[index];
+			TokenList tokens                = LexSource(alloc, testCase.source, &diag);
+
+			ASSERT_FALSE(tokens.truncated);
+			ASSERT_EQ(tokens.count, 2);
+			ASSERT_EQ(tokens.items[0].type, testCase.type);
+			ASSERT_STR_EQ(TokenLexeme(testCase.source, tokens.items[0]), testCase.lexeme);
+			ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		}
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(StringLiterals)
+	{
+		Diagnostics diag;
+
+		const SingleTokenCase cases[] = {
+		    {"\"\"", TOKEN_TYPE_STRING, "\"\""},
+		    {"\"hello\"", TOKEN_TYPE_STRING, "\"hello\""},
+		    {"\"line\\n\"", TOKEN_TYPE_STRING, "\"line\\n\""},
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -959,11 +1013,11 @@ namespace Wandelt
 		ASSERT_STR_CONTAINS(entry->message, "Unexpected character '#', did you mean '#entrypoint'?");
 	}
 
-	TEST(StandaloneLessThanReportsDiagnosticAndRecovers)
+	TEST(EmptyCharacterLiteralReportsDiagnosticAndRecovers)
 	{
 		Diagnostics diag;
 		Diagnostics::CaptureScope capture(diag);
-		const char* source = "< 42";
+		const char* source = "'' 42";
 		TokenList tokens   = LexSource(alloc, source, &diag);
 
 		ASSERT_FALSE(tokens.truncated);
@@ -978,14 +1032,14 @@ namespace Wandelt
 		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
 		ASSERT_EQ(entry->line, 1u);
 		ASSERT_EQ(entry->col, 1u);
-		ASSERT_STR_CONTAINS(entry->message, "Unexpected character '<'");
+		ASSERT_STR_CONTAINS(entry->message, "Invalid character literal");
 	}
 
-	TEST(StandaloneSlashReportsDiagnosticAndRecovers)
+	TEST(MultiCharacterLiteralReportsDiagnosticAndRecovers)
 	{
 		Diagnostics diag;
 		Diagnostics::CaptureScope capture(diag);
-		const char* source = "/ 42";
+		const char* source = "'uii' 42";
 		TokenList tokens   = LexSource(alloc, source, &diag);
 
 		ASSERT_FALSE(tokens.truncated);
@@ -1000,7 +1054,47 @@ namespace Wandelt
 		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
 		ASSERT_EQ(entry->line, 1u);
 		ASSERT_EQ(entry->col, 1u);
-		ASSERT_STR_CONTAINS(entry->message, "Unexpected character '/'");
+		ASSERT_STR_CONTAINS(entry->message, "Invalid character literal");
+	}
+
+	TEST(UnterminatedCharacterLiteralReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source = "'eee";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 2);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INVALID);
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+
+		Diagnostics::Entry* entry = diag.GetCaptured(0);
+		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
+		ASSERT_EQ(entry->line, 1u);
+		ASSERT_EQ(entry->col, 1u);
+		ASSERT_STR_CONTAINS(entry->message, "Unterminated character literal");
+	}
+
+	TEST(UnterminatedStringLiteralReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source = "\"eee";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 2);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INVALID);
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+
+		Diagnostics::Entry* entry = diag.GetCaptured(0);
+		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
+		ASSERT_EQ(entry->line, 1u);
+		ASSERT_EQ(entry->col, 1u);
+		ASSERT_STR_CONTAINS(entry->message, "Unterminated string literal");
 	}
 
 	TEST(MultipleErrorsAreReported)
@@ -1127,6 +1221,8 @@ namespace Wandelt
 		RUN_TEST(IntegerLiterals);
 		RUN_TEST(FloatingPointLiterals);
 		RUN_TEST(ZeroFloatLiterals);
+		RUN_TEST(CharacterLiterals);
+		RUN_TEST(StringLiterals);
 
 		PrintSection("Token sequences");
 		RUN_TEST(MixedTokenSequence);
@@ -1162,8 +1258,10 @@ namespace Wandelt
 		RUN_TEST(FloatLiteralMissingSuffixReportsDiagnostic);
 		RUN_TEST(UnknownDirectiveReportsDiagnosticAndRecovers);
 		RUN_TEST(HashWithoutDirectiveReportsDiagnosticAndRecovers);
-		RUN_TEST(StandaloneSlashReportsDiagnosticAndRecovers);
-		RUN_TEST(StandaloneLessThanReportsDiagnosticAndRecovers);
+		RUN_TEST(EmptyCharacterLiteralReportsDiagnosticAndRecovers);
+		RUN_TEST(MultiCharacterLiteralReportsDiagnosticAndRecovers);
+		RUN_TEST(UnterminatedCharacterLiteralReportsDiagnostic);
+		RUN_TEST(UnterminatedStringLiteralReportsDiagnostic);
 		RUN_TEST(MultipleErrorsAreReported);
 		RUN_TEST(ConsecutiveInvalidCharactersAreReported);
 		RUN_TEST(PeekAtOffsetReturnsInvalidForBadInput);
