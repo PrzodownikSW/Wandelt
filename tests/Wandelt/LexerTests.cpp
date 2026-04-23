@@ -143,6 +143,12 @@ namespace Wandelt
 		    {"cast", TOKEN_TYPE_CAST_KEYWORD, "cast"},
 		    {"fn", TOKEN_TYPE_FN_KEYWORD, "fn"},
 		    {"discard", TOKEN_TYPE_DISCARD_KEYWORD, "discard"},
+		    {"if", TOKEN_TYPE_IF_KEYWORD, "if"},
+		    {"else", TOKEN_TYPE_ELSE_KEYWORD, "else"},
+		    {"while", TOKEN_TYPE_WHILE_KEYWORD, "while"},
+		    {"for", TOKEN_TYPE_FOR_KEYWORD, "for"},
+		    {"break", TOKEN_TYPE_BREAK_KEYWORD, "break"},
+		    {"continue", TOKEN_TYPE_CONTINUE_KEYWORD, "continue"},
 		    {"void", TOKEN_TYPE_VOID_KEYWORD, "void"},
 		    {"bool", TOKEN_TYPE_BOOL_KEYWORD, "bool"},
 		    {"char", TOKEN_TYPE_CHAR_KEYWORD, "char"},
@@ -200,8 +206,9 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const char* cases[] = {
-		    "packageName", "returnValue", "castValue", "boolish",  "trueValue", "false_alarm", "uintptr2", "rawptrValue", "discarded", "intish",
-		    "intptrly",    "longish",     "doublish",  "shortish", "charish",   "stringish",   "floatish", "voidish",     "rawptrish",
+		    "packageName", "returnValue", "castValue", "boolish",   "trueValue",   "false_alarm", "uintptr2",  "rawptrValue", "discarded",
+		    "intish",      "intptrly",    "longish",   "doublish",  "shortish",    "charish",     "stringish", "floatish",    "voidish",
+		    "rawptrish",   "whilest",     "whileLoop", "breakable", "continueish", "forloop",     "forward",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -488,6 +495,56 @@ namespace Wandelt
 		const ExpectedToken expected[] = {
 		    {TOKEN_TYPE_PACKAGE_KEYWORD, "package"}, {TOKEN_TYPE_IDENTIFIER, "demo"}, {TOKEN_TYPE_ENTRYPOINT_DIRECTIVE, "#entrypoint"},
 		    {TOKEN_TYPE_RETURN_KEYWORD, "return"},   {TOKEN_TYPE_TRUE, "true"},
+		};
+		TokenList tokens = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, (i32)ArraySize(expected) + 1);
+
+		for (u32 index = 0; index < ArraySize(expected); index++)
+		{
+			ASSERT_EQ(tokens.items[index].type, expected[index].type);
+			ASSERT_STR_EQ(TokenLexeme(source, tokens.items[index]), expected[index].lexeme);
+		}
+
+		ASSERT_EQ(tokens.items[ArraySize(expected)].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileLoopTokenSequence)
+	{
+		Diagnostics diag;
+		const char* source             = "while true { continue; break; }";
+		const ExpectedToken expected[] = {
+		    {TOKEN_TYPE_WHILE_KEYWORD, "while"}, {TOKEN_TYPE_TRUE, "true"},
+		    {TOKEN_TYPE_OPEN_BRACE, "{"},        {TOKEN_TYPE_CONTINUE_KEYWORD, "continue"},
+		    {TOKEN_TYPE_SEMICOLON, ";"},         {TOKEN_TYPE_BREAK_KEYWORD, "break"},
+		    {TOKEN_TYPE_SEMICOLON, ";"},         {TOKEN_TYPE_CLOSE_BRACE, "}"},
+		};
+		TokenList tokens = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, (i32)ArraySize(expected) + 1);
+
+		for (u32 index = 0; index < ArraySize(expected); index++)
+		{
+			ASSERT_EQ(tokens.items[index].type, expected[index].type);
+			ASSERT_STR_EQ(TokenLexeme(source, tokens.items[index]), expected[index].lexeme);
+		}
+
+		ASSERT_EQ(tokens.items[ArraySize(expected)].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForLoopTokenSequence)
+	{
+		Diagnostics diag;
+		const char* source             = "for int x = 0; x < 10; x++ { }";
+		const ExpectedToken expected[] = {
+		    {TOKEN_TYPE_FOR_KEYWORD, "for"}, {TOKEN_TYPE_INT_KEYWORD, "int"}, {TOKEN_TYPE_IDENTIFIER, "x"}, {TOKEN_TYPE_EQUALS, "="},
+		    {TOKEN_TYPE_INTEGER, "0"},       {TOKEN_TYPE_SEMICOLON, ";"},     {TOKEN_TYPE_IDENTIFIER, "x"}, {TOKEN_TYPE_LESS, "<"},
+		    {TOKEN_TYPE_INTEGER, "10"},      {TOKEN_TYPE_SEMICOLON, ";"},     {TOKEN_TYPE_IDENTIFIER, "x"}, {TOKEN_TYPE_PLUS_PLUS, "++"},
+		    {TOKEN_TYPE_OPEN_BRACE, "{"},    {TOKEN_TYPE_CLOSE_BRACE, "}"},
 		};
 		TokenList tokens = LexSource(alloc, source, &diag);
 
@@ -1035,6 +1092,28 @@ namespace Wandelt
 		ASSERT_STR_CONTAINS(entry->message, "Invalid character literal");
 	}
 
+	TEST(UnsupportedCharacterEscapeReportsDiagnosticAndRecovers)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source = "'\\a' 42";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 3);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INVALID);
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_INTEGER);
+		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[1]), "42");
+		ASSERT_EQ(tokens.items[2].type, TOKEN_TYPE_EOF);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+
+		Diagnostics::Entry* entry = diag.GetCaptured(0);
+		ASSERT_EQ(entry->severity, Diagnostics::Severity::Error);
+		ASSERT_EQ(entry->line, 1u);
+		ASSERT_EQ(entry->col, 1u);
+		ASSERT_STR_CONTAINS(entry->message, "Invalid character escape sequence");
+	}
+
 	TEST(MultiCharacterLiteralReportsDiagnosticAndRecovers)
 	{
 		Diagnostics diag;
@@ -1226,6 +1305,8 @@ namespace Wandelt
 
 		PrintSection("Token sequences");
 		RUN_TEST(MixedTokenSequence);
+		RUN_TEST(WhileLoopTokenSequence);
+		RUN_TEST(ForLoopTokenSequence);
 		RUN_TEST(DotFollowedByNonDigit);
 		RUN_TEST(LineCommentBetweenTokens);
 		RUN_TEST(MultiLineCommentBetweenTokens);
@@ -1259,6 +1340,7 @@ namespace Wandelt
 		RUN_TEST(UnknownDirectiveReportsDiagnosticAndRecovers);
 		RUN_TEST(HashWithoutDirectiveReportsDiagnosticAndRecovers);
 		RUN_TEST(EmptyCharacterLiteralReportsDiagnosticAndRecovers);
+		RUN_TEST(UnsupportedCharacterEscapeReportsDiagnosticAndRecovers);
 		RUN_TEST(MultiCharacterLiteralReportsDiagnosticAndRecovers);
 		RUN_TEST(UnterminatedCharacterLiteralReportsDiagnostic);
 		RUN_TEST(UnterminatedStringLiteralReportsDiagnostic);

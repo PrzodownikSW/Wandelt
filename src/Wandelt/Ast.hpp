@@ -268,6 +268,11 @@ namespace Wandelt
 		STATEMENT_TYPE_EXPRESSION,
 		STATEMENT_TYPE_RETURN,
 		STATEMENT_TYPE_BLOCK,
+		STATEMENT_TYPE_IF,
+		STATEMENT_TYPE_WHILE,
+		STATEMENT_TYPE_FOR,
+		STATEMENT_TYPE_BREAK,
+		STATEMENT_TYPE_CONTINUE,
 
 		STATEMENT_TYPE_COUNT,
 	};
@@ -295,6 +300,27 @@ namespace Wandelt
 		Vector<struct Statement*> statements;
 	};
 
+	struct IfStatement
+	{
+		struct Expression* condition;
+		struct Statement* thenBlock;
+		struct Statement* elseBranch; // another if or else block or nullptr
+	};
+
+	struct WhileStatement
+	{
+		struct Expression* condition;
+		struct Statement* body;
+	};
+
+	struct ForStatement
+	{
+		struct Statement* init; // declaration statement or expression statement
+		struct Expression* condition;
+		struct Expression* increment;
+		struct Statement* body;
+	};
+
 	struct Statement
 	{
 		StatementType type;
@@ -305,6 +331,9 @@ namespace Wandelt
 			ExpressionStatement expression;
 			ReturnStatement returnStmt;
 			BlockStatement block;
+			IfStatement ifStmt;
+			WhileStatement whileStmt;
+			ForStatement forStmt;
 		};
 	};
 

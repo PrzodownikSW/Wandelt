@@ -21,9 +21,39 @@ fn int test_1(int x, int y)
 discard test_1(12, 15);
 discard test_1(y = 12, x = 12);
 
+fn int test22()
+{
+	for int x = 0; x < 10; x++ {
+		if x == 5 {
+			return 12;
+		}
+
+		return x * 2;
+	}
+
+	return 1;
+}
+
 fn int test()
 {
-	return 120;
+	if true {
+		return 12;
+	} else if 2 == 4 {
+		return 12;
+	} else {
+		return 12;
+	}
+
+	while cast(bool) 1 {
+		continue;
+		break;
+	}
+
+	for int x = 0; x < 10; x++ {
+		if x == 5 {
+			break;
+		}
+	}
 }
 
 // struct Vector2
@@ -42,7 +72,7 @@ fn int test()
 
 fn int main()
 {
-	char c = 'a';
+	char c = 'n';
 	string s = "Hello, World!";
 	cstring cs = "CString";
 

@@ -1,6 +1,8 @@
 #include "Tests.hpp"
 
+#include "Wandelt/Memory.hpp"
 #include "Wandelt/ScopedTimer.hpp"
+#include "Wandelt/Type.hpp"
 
 #include "LexerTests.hpp"
 #include "ParserTests.hpp"
@@ -13,6 +15,11 @@ namespace Wandelt
 	{
 		SetTestFilter(filter);
 		SetTestUseColor(useColors);
+
+		VirtualMemoryAllocator heapAllocator(Megabytes(10));
+		ArenaAllocator typeArenaAllocator(&heapAllocator, Megabytes(1));
+
+		Type::Initialize(&typeArenaAllocator);
 
 		ScopedTimer timer;
 

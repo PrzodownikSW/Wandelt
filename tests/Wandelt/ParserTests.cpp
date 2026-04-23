@@ -716,6 +716,435 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(IfStatementParsesSimple)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		if (!AssertBooleanConstant(ifStatement->ifStmt.condition, true))
+			return;
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->block.statements.Length(), 0u);
+		ASSERT_EQ(ifStatement->ifStmt.elseBranch, static_cast<Statement*>(nullptr));
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementParsesThenBlockBody)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true { int x = 1; } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->block.statements.Length(), 1u);
+
+		Statement* innerStatement = ifStatement->ifStmt.thenBlock->block.statements[0];
+		ASSERT_EQ(innerStatement->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_EQ(innerStatement->declaration.declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(innerStatement->declaration.declaration->variable.name, "x");
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementParsesIfElse)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true { } else { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		if (!AssertBooleanConstant(ifStatement->ifStmt.condition, true))
+			return;
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->block.statements.Length(), 0u);
+
+		Statement* elseBranch = ifStatement->ifStmt.elseBranch;
+		ASSERT_TRUE(elseBranch != nullptr);
+		ASSERT_EQ(elseBranch->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(elseBranch->block.statements.Length(), 0u);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementParsesIfElseIfElseChain)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true { } else if 2 == 4 { } else { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		if (!AssertBooleanConstant(ifStatement->ifStmt.condition, true))
+			return;
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->type, STATEMENT_TYPE_BLOCK);
+
+		Statement* elseIfStatement = ifStatement->ifStmt.elseBranch;
+		ASSERT_TRUE(elseIfStatement != nullptr);
+		ASSERT_EQ(elseIfStatement->type, STATEMENT_TYPE_IF);
+		if (!AssertBinaryExpression(elseIfStatement->ifStmt.condition, BINARY_OPERATOR_EQ))
+			return;
+		ASSERT_EQ(elseIfStatement->ifStmt.thenBlock->type, STATEMENT_TYPE_BLOCK);
+
+		Statement* tailElseBranch = elseIfStatement->ifStmt.elseBranch;
+		ASSERT_TRUE(tailElseBranch != nullptr);
+		ASSERT_EQ(tailElseBranch->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementParsesConditionAsExpression)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if x == 1 { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		if (!AssertBinaryExpression(ifStatement->ifStmt.condition, BINARY_OPERATOR_EQ))
+			return;
+		if (!AssertIdentifierExpression(ifStatement->ifStmt.condition->binary.left, "x"))
+			return;
+		if (!AssertIntegerConstant(ifStatement->ifStmt.condition->binary.right, 1u))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementMissingConditionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 21u, "Expected an expression"}))
+			return;
+	}
+
+	TEST(IfStatementMissingThenBlockReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true; }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 25u, "Expected a '{' to start a scope"}))
+			return;
+	}
+
+	TEST(IfStatementMissingElseBlockReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { if true { } else 1; }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 35u, "Expected a '{' to start a scope"}))
+			return;
+	}
+
+	TEST(WhileStatementParsesSimple)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* whileStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(whileStatement->type, STATEMENT_TYPE_WHILE);
+		if (!AssertBooleanConstant(whileStatement->whileStmt.condition, true))
+			return;
+		ASSERT_EQ(whileStatement->whileStmt.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(whileStatement->whileStmt.body->block.statements.Length(), 0u);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementParsesBodyWithBreakAndContinue)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true { continue; break; } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* whileStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(whileStatement->type, STATEMENT_TYPE_WHILE);
+		ASSERT_EQ(whileStatement->whileStmt.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(whileStatement->whileStmt.body->block.statements.Length(), 2u);
+
+		ASSERT_EQ(whileStatement->whileStmt.body->block.statements[0]->type, STATEMENT_TYPE_CONTINUE);
+		ASSERT_EQ(whileStatement->whileStmt.body->block.statements[1]->type, STATEMENT_TYPE_BREAK);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementParsesConditionAsExpression)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while x == 1 { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration  = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		Statement* whileStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(whileStatement->type, STATEMENT_TYPE_WHILE);
+		if (!AssertBinaryExpression(whileStatement->whileStmt.condition, BINARY_OPERATOR_EQ))
+			return;
+		if (!AssertIdentifierExpression(whileStatement->whileStmt.condition->binary.left, "x"))
+			return;
+		if (!AssertIntegerConstant(whileStatement->whileStmt.condition->binary.right, 1u))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementParsesNested)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true { while false { break; } } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		Statement* outerWhile    = declaration->function.body->block.statements[0];
+		ASSERT_EQ(outerWhile->type, STATEMENT_TYPE_WHILE);
+		ASSERT_EQ(outerWhile->whileStmt.body->block.statements.Length(), 1u);
+
+		Statement* innerWhile = outerWhile->whileStmt.body->block.statements[0];
+		ASSERT_EQ(innerWhile->type, STATEMENT_TYPE_WHILE);
+		if (!AssertBooleanConstant(innerWhile->whileStmt.condition, false))
+			return;
+		ASSERT_EQ(innerWhile->whileStmt.body->block.statements.Length(), 1u);
+		ASSERT_EQ(innerWhile->whileStmt.body->block.statements[0]->type, STATEMENT_TYPE_BREAK);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementMissingConditionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 24u, "Expected an expression"}))
+			return;
+	}
+
+	TEST(WhileStatementMissingBodyReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true; }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		Declaration* functionDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(functionDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(functionDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(functionDeclaration->function.body->block.statements.Length(), 0u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 28u, "Expected a '{' to start a scope"}))
+			return;
+	}
+
+	TEST(BreakStatementMissingSemicolonReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true { break } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 37u, "Expected a ';'"}))
+			return;
+	}
+
+	TEST(ContinueStatementMissingSemicolonReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { while true { continue } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 40u, "Expected a ';'"}))
+			return;
+	}
+
+	TEST(ForStatementParsesSimple)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { for int x = 0; x < 10; x++ { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* forStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(forStatement->type, STATEMENT_TYPE_FOR);
+
+		Statement* initStatement = forStatement->forStmt.init;
+		ASSERT_EQ(initStatement->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_EQ(initStatement->declaration.declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(initStatement->declaration.declaration->variable.name, "x");
+
+		if (!AssertBinaryExpression(forStatement->forStmt.condition, BINARY_OPERATOR_LT))
+			return;
+		if (!AssertIdentifierExpression(forStatement->forStmt.condition->binary.left, "x"))
+			return;
+		if (!AssertIntegerConstant(forStatement->forStmt.condition->binary.right, 10u))
+			return;
+
+		ASSERT_EQ(forStatement->forStmt.increment->type, EXPRESSION_TYPE_INCDEC);
+		ASSERT_TRUE(forStatement->forStmt.increment->incdec.isPostfix);
+		ASSERT_TRUE(forStatement->forStmt.increment->incdec.isIncrement);
+
+		ASSERT_EQ(forStatement->forStmt.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(forStatement->forStmt.body->block.statements.Length(), 0u);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementParsesBodyWithIfAndBreak)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { for int x = 0; x < 10; x++ { if x == 5 { break; } } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		Statement* forStatement  = declaration->function.body->block.statements[0];
+		ASSERT_EQ(forStatement->type, STATEMENT_TYPE_FOR);
+		ASSERT_EQ(forStatement->forStmt.body->block.statements.Length(), 1u);
+
+		Statement* ifStatement = forStatement->forStmt.body->block.statements[0];
+		ASSERT_EQ(ifStatement->type, STATEMENT_TYPE_IF);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->block.statements.Length(), 1u);
+		ASSERT_EQ(ifStatement->ifStmt.thenBlock->block.statements[0]->type, STATEMENT_TYPE_BREAK);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementParsesExpressionInit)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { int x = 0; for x = 0; x < 10; x++ { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 2u);
+
+		Statement* forStatement = declaration->function.body->block.statements[1];
+		ASSERT_EQ(forStatement->type, STATEMENT_TYPE_FOR);
+		ASSERT_EQ(forStatement->forStmt.init->type, STATEMENT_TYPE_EXPRESSION);
+		ASSERT_EQ(forStatement->forStmt.init->expression.expression->type, EXPRESSION_TYPE_ASSIGNMENT);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementParsesNested)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit =
+		    ParseSource(alloc, "fn void main() { for int x = 0; x < 10; x++ { for int y = 0; y < 10; y++ { } } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		Statement* outerFor      = declaration->function.body->block.statements[0];
+		ASSERT_EQ(outerFor->type, STATEMENT_TYPE_FOR);
+		ASSERT_EQ(outerFor->forStmt.body->block.statements.Length(), 1u);
+
+		Statement* innerFor = outerFor->forStmt.body->block.statements[0];
+		ASSERT_EQ(innerFor->type, STATEMENT_TYPE_FOR);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementMissingInitSemicolonReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { for int x = 0 x < 10; x++ { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 32u, "Expected a ';'"}))
+			return;
+	}
+
+	TEST(ForStatementMissingConditionSemicolonReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { for int x = 0; x < 10 x++ { } }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 40u, "Expected a ';'"}))
+			return;
+	}
+
+	TEST(ForStatementMissingBodyReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { for int x = 0; x < 10; x++; }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 44u, "Expected a '{' to start a scope"}))
+			return;
+	}
+
 	TEST(CastExpressionMissingOpenParenReportsDiagnostic)
 	{
 		Diagnostics diag;
@@ -1126,6 +1555,55 @@ namespace Wandelt
 			return;
 	}
 
+	TEST(NestedFunctionDeclarationInBlockReportsDiagnosticAndSkipsBody)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source              = "fn void outer() {\n"
+		                                  "    fn void inner()\n"
+		                                  "    {\n"
+		                                  "        int x = 1;\n"
+		                                  "    }\n"
+		                                  "}";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* outerDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(outerDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_STR_EQ(outerDeclaration->function.name, "outer");
+		ASSERT_EQ(outerDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(outerDeclaration->function.body->block.statements.Length(), 0u);
+
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 5u, "'fn' declarations are only allowed at the top level"}))
+			return;
+	}
+
+	TEST(NestedPackageDeclarationInBlockReportsDiagnosticAndSkipsToSemicolon)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		const char* source              = "fn void outer() {\n"
+		                                  "    package nested;\n"
+		                                  "    int x = 1;\n"
+		                                  "}";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* outerDeclaration = GetDeclarationFromStatement(translationUnit.statements[0]);
+		ASSERT_EQ(outerDeclaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(outerDeclaration->function.body->type, STATEMENT_TYPE_BLOCK);
+		ASSERT_EQ(outerDeclaration->function.body->block.statements.Length(), 1u);
+		ASSERT_EQ(outerDeclaration->function.body->block.statements[0]->type, STATEMENT_TYPE_DECLARATION);
+		ASSERT_STR_EQ(outerDeclaration->function.body->block.statements[0]->declaration.declaration->variable.name, "x");
+
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 5u, "'package' declarations are only allowed at the top level"}))
+			return;
+	}
+
 	TEST(RecoveryContinuesAfterInvalidFunctionDeclaration)
 	{
 		Diagnostics diag;
@@ -1188,6 +1666,19 @@ namespace Wandelt
 		RUN_TEST(AssignmentExpressionStatementParses);
 		RUN_TEST(CompoundAssignmentExpressionStatementParses);
 		RUN_TEST(AssignmentExpressionParsesRightAssociatively);
+		RUN_TEST(IfStatementParsesSimple);
+		RUN_TEST(IfStatementParsesThenBlockBody);
+		RUN_TEST(IfStatementParsesIfElse);
+		RUN_TEST(IfStatementParsesIfElseIfElseChain);
+		RUN_TEST(IfStatementParsesConditionAsExpression);
+		RUN_TEST(WhileStatementParsesSimple);
+		RUN_TEST(WhileStatementParsesBodyWithBreakAndContinue);
+		RUN_TEST(WhileStatementParsesConditionAsExpression);
+		RUN_TEST(WhileStatementParsesNested);
+		RUN_TEST(ForStatementParsesSimple);
+		RUN_TEST(ForStatementParsesBodyWithIfAndBreak);
+		RUN_TEST(ForStatementParsesExpressionInit);
+		RUN_TEST(ForStatementParsesNested);
 
 		PrintSection("Diagnostics and recovery");
 		RUN_TEST(MissingPackageIdentifierReportsDiagnostic);
@@ -1213,9 +1704,21 @@ namespace Wandelt
 		RUN_TEST(CastExpressionMissingTargetTypeReportsDiagnostic);
 		RUN_TEST(CastExpressionMissingCloseParenReportsDiagnostic);
 		RUN_TEST(CastExpressionMissingOperandReportsDiagnostic);
+		RUN_TEST(IfStatementMissingConditionReportsDiagnostic);
+		RUN_TEST(IfStatementMissingThenBlockReportsDiagnostic);
+		RUN_TEST(IfStatementMissingElseBlockReportsDiagnostic);
+		RUN_TEST(WhileStatementMissingConditionReportsDiagnostic);
+		RUN_TEST(WhileStatementMissingBodyReportsDiagnostic);
+		RUN_TEST(BreakStatementMissingSemicolonReportsDiagnostic);
+		RUN_TEST(ContinueStatementMissingSemicolonReportsDiagnostic);
+		RUN_TEST(ForStatementMissingInitSemicolonReportsDiagnostic);
+		RUN_TEST(ForStatementMissingConditionSemicolonReportsDiagnostic);
+		RUN_TEST(ForStatementMissingBodyReportsDiagnostic);
 		RUN_TEST(RecoveryContinuesInsideFunctionBodyAfterInvalidStatement);
 		RUN_TEST(RecoveryContinuesAfterMultipleConsecutiveInvalidStatementsInBlock);
 		RUN_TEST(RecoveryContinuesAfterInvalidTopLevelStatement);
+		RUN_TEST(NestedFunctionDeclarationInBlockReportsDiagnosticAndSkipsBody);
+		RUN_TEST(NestedPackageDeclarationInBlockReportsDiagnosticAndSkipsToSemicolon);
 		RUN_TEST(RecoveryContinuesAfterInvalidFunctionDeclaration);
 
 		f64 totalMs = timer.GetElapsedMilliseconds();

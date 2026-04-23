@@ -26,6 +26,24 @@ namespace Wandelt
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 			return "discard";
 
+		case TOKEN_TYPE_IF_KEYWORD:
+			return "if";
+
+		case TOKEN_TYPE_ELSE_KEYWORD:
+			return "else";
+
+		case TOKEN_TYPE_WHILE_KEYWORD:
+			return "while";
+
+		case TOKEN_TYPE_FOR_KEYWORD:
+			return "for";
+
+		case TOKEN_TYPE_BREAK_KEYWORD:
+			return "break";
+
+		case TOKEN_TYPE_CONTINUE_KEYWORD:
+			return "continue";
+
 		case TOKEN_TYPE_ENTRYPOINT_DIRECTIVE:
 			return "#entrypoint";
 

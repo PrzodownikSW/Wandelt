@@ -436,6 +436,21 @@ namespace Wandelt
 		case STATEMENT_TYPE_BLOCK:
 			return "BlockStatement";
 
+		case STATEMENT_TYPE_IF:
+			return "IfStatement";
+
+		case STATEMENT_TYPE_WHILE:
+			return "WhileStatement";
+
+		case STATEMENT_TYPE_FOR:
+			return "ForStatement";
+
+		case STATEMENT_TYPE_BREAK:
+			return "BreakStatement";
+
+		case STATEMENT_TYPE_CONTINUE:
+			return "ContinueStatement";
+
 		case STATEMENT_TYPE_COUNT:
 			ASSERT(false, "Invalid statement type!");
 		}

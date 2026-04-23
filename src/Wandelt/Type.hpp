@@ -69,6 +69,7 @@ namespace Wandelt
 
 	struct FunctionType
 	{
+		struct Type* returnType;
 		Vector<struct Type*> params;
 		bool isVariadic;
 	};
@@ -100,6 +101,8 @@ namespace Wandelt
 		inline bool IsArchDependent() { return HasFlag(TYPE_FLAG_ARCH_DEP); }
 		inline bool IsArithmetic() { return HasFlag(TYPE_FLAG_INTEGER) || HasFlag(TYPE_FLAG_FLOATING_POINT); }
 
+		static void Initialize(Allocator* allocator);
+
 		bool IsImplicitlyConvertibleTo(Type* other);
 		bool IsExplicitlyConvertibleTo(Type* other);
 		bool CanRepresentIntegerConstant(u64 value) const;
@@ -108,6 +111,7 @@ namespace Wandelt
 
 		static Type* GetBuiltinType(BuiltinTypeKind kind);
 		static Type* TryGetBuiltinType(BuiltinTypeKind kind);
+		static Type* GetFunctionType(Type* returnType, const Vector<Type*>& paramTypes, bool isVariadic);
 		static Type* GetDefaultTypeForIntegerConstant(u64 value);
 
 		static Type* GetImplicitCommonType(Type* a, Type* b);

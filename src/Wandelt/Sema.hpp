@@ -41,6 +41,11 @@ namespace Wandelt
 		bool AnalyzeExpressionStatement(Statement* stmt);
 		bool AnalyzeReturnStatement(Statement* stmt);
 		bool AnalyzeBlockStatement(Statement* stmt);
+		bool AnalyzeIfStatement(Statement* stmt);
+		bool AnalyzeWhileStatement(Statement* stmt);
+		bool AnalyzeForStatement(Statement* stmt);
+		bool AnalyzeBreakStatement(Statement* stmt);
+		bool AnalyzeContinueStatement(Statement* stmt);
 
 		bool AnalyzeDeclaration(Declaration* decl);
 		bool AnalyzeDeclarationInternal(Declaration* decl);
@@ -60,6 +65,9 @@ namespace Wandelt
 		bool AnalyzeAssignmentExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCallArgument(Expression** argumentExpression, Declaration* parameterDecl);
 
+		bool ExpressionHasSideEffect(const Expression* expr);
+		bool StatementAlwaysReturns(const Statement* stmt);
+
 		Expression* InjectCast(Expression* inner, Type* target);
 
 	private:
@@ -69,6 +77,7 @@ namespace Wandelt
 		TranslationUnit* m_TranslationUnit = nullptr;
 		Diagnostics* m_Diagnostics         = nullptr;
 		Declaration* m_CurrentFunctionDecl = nullptr;
+		i32 m_LoopDepth                    = 0;
 	};
 
 } // namespace Wandelt

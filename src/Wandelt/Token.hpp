@@ -10,11 +10,17 @@ namespace Wandelt
 		TOKEN_TYPE_INVALID = 0,
 
 		// Keywords
-		TOKEN_TYPE_PACKAGE_KEYWORD, // 'package'
-		TOKEN_TYPE_RETURN_KEYWORD,  // 'return'
-		TOKEN_TYPE_CAST_KEYWORD,    // 'cast'
-		TOKEN_TYPE_FN_KEYWORD,      // 'fn'
-		TOKEN_TYPE_DISCARD_KEYWORD, // 'discard'
+		TOKEN_TYPE_PACKAGE_KEYWORD,  // 'package'
+		TOKEN_TYPE_RETURN_KEYWORD,   // 'return'
+		TOKEN_TYPE_CAST_KEYWORD,     // 'cast'
+		TOKEN_TYPE_FN_KEYWORD,       // 'fn'
+		TOKEN_TYPE_DISCARD_KEYWORD,  // 'discard'
+		TOKEN_TYPE_IF_KEYWORD,       // 'if'
+		TOKEN_TYPE_ELSE_KEYWORD,     // 'else'
+		TOKEN_TYPE_WHILE_KEYWORD,    // 'while'
+		TOKEN_TYPE_FOR_KEYWORD,      // 'for'
+		TOKEN_TYPE_BREAK_KEYWORD,    // 'break'
+		TOKEN_TYPE_CONTINUE_KEYWORD, // 'continue'
 
 		// Directives
 		TOKEN_TYPE_ENTRYPOINT_DIRECTIVE, // '#entrypoint'

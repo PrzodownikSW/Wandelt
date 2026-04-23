@@ -17,6 +17,23 @@ namespace Wandelt
 
 	static Token s_InvalidToken = {.type = TOKEN_TYPE_INVALID};
 
+	static bool IsSupportedCharacterEscape(char escapedCharacter)
+	{
+		switch (escapedCharacter)
+		{
+		case 'n':
+		case 'r':
+		case 't':
+		case '\\':
+		case '\'':
+		case '0':
+			return true;
+
+		default:
+			return false;
+		}
+	}
+
 	Lexer::Lexer(File* file, Diagnostics* diagnostics)
 	    : m_File(file), m_Diagnostics(diagnostics), m_CachedToken(s_InvalidToken), m_CurrentChar(file->Content().Data())
 	{
@@ -167,6 +184,8 @@ namespace Wandelt
 		case 'b':
 			if (ident == "bool")
 				return CreateNewToken(TOKEN_TYPE_BOOL_KEYWORD);
+			if (ident == "break")
+				return CreateNewToken(TOKEN_TYPE_BREAK_KEYWORD);
 			break;
 
 		case 'c':
@@ -176,6 +195,8 @@ namespace Wandelt
 				return CreateNewToken(TOKEN_TYPE_CHAR_KEYWORD);
 			if (ident == "cstring")
 				return CreateNewToken(TOKEN_TYPE_CSTRING_KEYWORD);
+			if (ident == "continue")
+				return CreateNewToken(TOKEN_TYPE_CONTINUE_KEYWORD);
 			break;
 
 		case 'd':
@@ -185,6 +206,11 @@ namespace Wandelt
 				return CreateNewToken(TOKEN_TYPE_DOUBLE_KEYWORD);
 			break;
 
+		case 'e':
+			if (ident == "else")
+				return CreateNewToken(TOKEN_TYPE_ELSE_KEYWORD);
+			break;
+
 		case 'f':
 			if (ident == "fn")
 				return CreateNewToken(TOKEN_TYPE_FN_KEYWORD);
@@ -192,9 +218,13 @@ namespace Wandelt
 				return CreateNewToken(TOKEN_TYPE_FLOAT_KEYWORD);
 			if (ident == "false")
 				return CreateNewToken(TOKEN_TYPE_FALSE);
+			if (ident == "for")
+				return CreateNewToken(TOKEN_TYPE_FOR_KEYWORD);
 			break;
 
 		case 'i':
+			if (ident == "if")
+				return CreateNewToken(TOKEN_TYPE_IF_KEYWORD);
 			if (ident == "int")
 				return CreateNewToken(TOKEN_TYPE_INT_KEYWORD);
 			if (ident == "intptr")
@@ -245,6 +275,11 @@ namespace Wandelt
 		case 'v':
 			if (ident == "void")
 				return CreateNewToken(TOKEN_TYPE_VOID_KEYWORD);
+			break;
+
+		case 'w':
+			if (ident == "while")
+				return CreateNewToken(TOKEN_TYPE_WHILE_KEYWORD);
 			break;
 
 		case 'p':
@@ -312,6 +347,9 @@ namespace Wandelt
 
 	Token Lexer::LexCharacterLiteral()
 	{
+		bool hasInvalidEscape  = false;
+		char invalidEscapeChar = '\0';
+
 		if (IsEOF() || IsAtNewline())
 		{
 			Token error = CreateNewToken(TOKEN_TYPE_INVALID);
@@ -340,6 +378,8 @@ namespace Wandelt
 				return error;
 			}
 
+			invalidEscapeChar = GetCurrentChar();
+			hasInvalidEscape  = !IsSupportedCharacterEscape(invalidEscapeChar);
 			Advance(); // consume escaped character
 		}
 		else
@@ -350,6 +390,14 @@ namespace Wandelt
 		if (GetCurrentChar() == '\'')
 		{
 			Advance(); // consume closing quote
+
+			if (hasInvalidEscape)
+			{
+				Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+				m_Diagnostics->ReportError(error.span, m_File, "Invalid character escape sequence '\\{}'", invalidEscapeChar);
+				return error;
+			}
+
 			return CreateNewToken(TOKEN_TYPE_CHARACTER);
 		}
 

@@ -375,6 +375,24 @@ Positional arguments bind by order. Named arguments bind by parameter name and m
 
 A call may appear as an expression or as a top-level statement in the entrypoint package.
 
+## Expression statements
+
+Only expressions with a side effect are valid as a statement.
+
+```c
+fn int main()
+{
+    int x = 12;
+
+    x;         // error: expression statement has no effect
+    x + 1;     // error: expression statement has no effect
+    x = x + 1; // ok: assignment
+    x++;       // ok: increment
+
+    return x;
+}
+```
+
 ## Discarding return values
 
 When a call appears as an expression statement and the called function has a non-`void` return type, the returned value must be used or the call must be prefixed with the `discard` keyword. Silently dropping a non-`void` return value is an error.
@@ -393,3 +411,133 @@ fn void main()
 ```
 
 `discard` is a statement-level prefix; it may only appear immediately before an expression statement and is not an operator that participates in larger expressions.
+
+# Control flow
+
+## If statements
+
+An `if` statement conditionally executes a block based on a boolean condition:
+
+```c
+if x == 1 {
+    discard work();
+}
+```
+
+The condition is written directly after the `if` keyword without surrounding parentheses and must have type `bool`. An integer, floating-point, or other non-`bool` condition is an error.
+
+An `if` may be followed by an `else` block, which runs when the condition is false:
+
+```c
+if x == 1 {
+    discard work();
+} else {
+    discard other();
+}
+```
+
+Multiple conditions are chained with `else if`:
+
+```c
+if x == 1 {
+    discard a();
+} else if x == 2 {
+    discard b();
+} else {
+    discard c();
+}
+```
+
+The `then` block, each `else if` block, and the final `else` block each introduce their own scope. A variable declared inside one branch is not visible after the `if` ends or in sibling branches.
+
+### Return analysis for non-`void` functions
+
+A non-`void` function must return a value on every control path. An `if` chain only guarantees a return when both of the following hold:
+
+* there is a terminating `else` block, and
+* every `then` / `else if` / `else` branch itself returns on every control path
+
+An `if` without a terminating `else`, or with any branch that falls through without returning, does not count as a guaranteed return:
+
+```c
+fn int f() {
+    if cond { return 1; }  // error: missing return on the 'cond is false' path
+}
+
+fn int g() {
+    if cond { return 1; }
+    return 2;              // ok: fallthrough path is covered by the trailing return
+}
+
+fn int h() {
+    if cond { return 1; } else { return 2; }  // ok: every path returns
+}
+```
+
+## While loops
+
+A `while` loop repeatedly executes its body as long as a boolean condition holds:
+
+```c
+while keep_going {
+    discard step();
+}
+```
+
+The condition is written directly after the `while` keyword without parentheses and must have type `bool`. A non-`bool` condition is an error.
+
+The body is a block and introduces its own scope.
+
+Because a `while` may execute zero times, it does not on its own satisfy the return-on-every-path requirement of a non-`void` function:
+
+```c
+fn int f() {
+    while cond { return 1; }  // error: loop may not execute
+}
+```
+
+## For loops
+
+A `for` loop bundles an initializer, a condition, and an increment into a single header:
+
+```c
+for int x = 0; x < 10; x++ {
+    if x == 5 {
+        break;
+    }
+}
+```
+
+The header has three clauses separated by semicolons:
+
+* **init** — a variable declaration or an expression statement. Both forms consume their own trailing `;`. A variable declared here is scoped to the `for` loop and is not visible after it.
+* **condition** — an expression of type `bool`, followed by a `;`. A non-`bool` condition is an error.
+* **increment** — an expression that must have a side effect (assignment, compound assignment, call, or increment/decrement). A pure expression like `x + 1` is rejected for the same reason a pure expression statement is rejected.
+
+The loop executes the init once, then repeatedly evaluates the condition; for each iteration where the condition is true it runs the body and then the increment.
+
+The init, condition, increment, and body all share a single scope. As with `while`, a `for` loop is not sufficient on its own to satisfy the return-on-every-path requirement.
+
+## Break and continue
+
+`break;` exits the innermost enclosing loop. `continue;` ends the current iteration and proceeds to the next one (for a `for` loop, the increment still runs before the condition is re-checked).
+
+Both statements must appear inside a `while` or `for` loop. A `break` or `continue` outside any loop is an error:
+
+```c
+fn void main() {
+    break;     // error: 'break' statement is only allowed inside a loop
+    continue;  // error: 'continue' statement is only allowed inside a loop
+}
+```
+
+When loops are nested, `break` and `continue` always apply to the innermost enclosing loop:
+
+```c
+while a {
+    while b {
+        break;  // exits the inner 'while b' loop
+    }
+    // execution continues here
+}
+```

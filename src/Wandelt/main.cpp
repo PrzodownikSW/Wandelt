@@ -60,10 +60,13 @@ int main(int argc, char* argv[])
 #endif
 
 	VirtualMemoryAllocator heapAllocator(Megabytes(10));
+	ArenaAllocator typeArenaAllocator(&heapAllocator, Megabytes(1));
 	ArenaAllocator stringArenaAllocator(&heapAllocator, Megabytes(1));
 	ArenaAllocator stmtArenaAllocator(&heapAllocator, Megabytes(1));
 	ArenaAllocator declArenaAllocator(&heapAllocator, Megabytes(1));
 	ArenaAllocator exprArenaAllocator(&heapAllocator, Megabytes(1));
+
+	Type::Initialize(&typeArenaAllocator);
 
 	String demo_filepath = String::FromCStr(&stringArenaAllocator, DEMO_PATH "main.wdt");
 	File demo_file{&stringArenaAllocator, std::move(demo_filepath)};

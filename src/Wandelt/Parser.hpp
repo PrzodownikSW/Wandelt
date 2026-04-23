@@ -66,6 +66,11 @@ namespace Wandelt
 		Statement* ParseExpressionStatement();
 		Statement* ParseReturnStatement();
 		Statement* ParseBlockStatement();
+		Statement* ParseIfStatement();
+		Statement* ParseWhileStatement();
+		Statement* ParseForStatement();
+		Statement* ParseBreakStatement();
+		Statement* ParseContinueStatement();
 
 		Declaration* ParseDeclaration();
 		Declaration* ParsePackageDeclaration();

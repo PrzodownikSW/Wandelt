@@ -90,7 +90,21 @@ namespace Wandelt
 				break; // variables register themselves when encountered during analysis
 
 			case DECLARATION_TYPE_FUNCTION: {
-				Symbol* sym = m_SymbolTable.Insert(decl->function.name, SYMBOL_KIND_FUNCTION, decl->function.returnType, decl);
+				Vector<Type*> parameterTypes = {};
+				if (!decl->function.parameters.IsEmpty())
+				{
+					parameterTypes = Vector<Type*>::Create(m_DeclAllocator, decl->function.parameters.Length());
+					for (Declaration* parameterDecl : decl->function.parameters)
+					{
+						ASSERT(parameterDecl != nullptr);
+						ASSERT(parameterDecl->type == DECLARATION_TYPE_VARIABLE);
+
+						parameterTypes.Push(parameterDecl->variable.type);
+					}
+				}
+
+				Type* functionType = Type::GetFunctionType(decl->function.returnType, parameterTypes, false);
+				Symbol* sym        = m_SymbolTable.Insert(decl->function.name, SYMBOL_KIND_FUNCTION, functionType, decl);
 				if (sym == nullptr)
 				{
 					m_Diagnostics->ReportError(decl->span, m_TranslationUnit->file, "Function '{}' was already declared in this package",
@@ -135,6 +149,16 @@ namespace Wandelt
 			return AnalyzeReturnStatement(stmt);
 		case STATEMENT_TYPE_BLOCK:
 			return AnalyzeBlockStatement(stmt);
+		case STATEMENT_TYPE_IF:
+			return AnalyzeIfStatement(stmt);
+		case STATEMENT_TYPE_WHILE:
+			return AnalyzeWhileStatement(stmt);
+		case STATEMENT_TYPE_FOR:
+			return AnalyzeForStatement(stmt);
+		case STATEMENT_TYPE_BREAK:
+			return AnalyzeBreakStatement(stmt);
+		case STATEMENT_TYPE_CONTINUE:
+			return AnalyzeContinueStatement(stmt);
 		default:
 			break;
 		}
@@ -153,6 +177,14 @@ namespace Wandelt
 		Expression* expr = stmt->expression.expression;
 		if (!AnalyzeExpression(expr, nullptr))
 			return false;
+
+		if (!ExpressionHasSideEffect(expr))
+		{
+			m_Diagnostics->ReportError(
+			    stmt->span, m_TranslationUnit->file,
+			    "Expression statements without side effects are not allowed; the expression of this statement has no effect and can be removed");
+			return false;
+		}
 
 		const bool discarded   = stmt->expression.discarded;
 		const bool isCall      = expr->type == EXPRESSION_TYPE_CALL;
@@ -214,6 +246,123 @@ namespace Wandelt
 		}
 
 		return success;
+	}
+
+	bool Sema::AnalyzeIfStatement(Statement* stmt)
+	{
+		Type* boolType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
+
+		bool success = true;
+
+		if (!AnalyzeExpression(stmt->ifStmt.condition, nullptr))
+		{
+			success = false;
+		}
+		else if (stmt->ifStmt.condition->resolvedType != boolType)
+		{
+			m_Diagnostics->ReportError(stmt->ifStmt.condition->span, m_TranslationUnit->file,
+			                           "If-statement condition must be of type 'bool', got '{}'", stmt->ifStmt.condition->resolvedType->ToString());
+			success = false;
+		}
+
+		if (!AnalyzeStatement(stmt->ifStmt.thenBlock))
+			success = false;
+
+		if (stmt->ifStmt.elseBranch != nullptr && !AnalyzeStatement(stmt->ifStmt.elseBranch))
+			success = false;
+
+		return success;
+	}
+
+	bool Sema::AnalyzeWhileStatement(Statement* stmt)
+	{
+		Type* boolType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
+
+		bool success = true;
+
+		if (!AnalyzeExpression(stmt->whileStmt.condition, nullptr))
+		{
+			success = false;
+		}
+		else if (stmt->whileStmt.condition->resolvedType != boolType)
+		{
+			m_Diagnostics->ReportError(stmt->whileStmt.condition->span, m_TranslationUnit->file,
+			                           "While-statement condition must be of type 'bool', got '{}'",
+			                           stmt->whileStmt.condition->resolvedType->ToString());
+			success = false;
+		}
+
+		m_LoopDepth++;
+
+		if (!AnalyzeStatement(stmt->whileStmt.body))
+			success = false;
+
+		m_LoopDepth--;
+
+		return success;
+	}
+
+	bool Sema::AnalyzeForStatement(Statement* stmt)
+	{
+		Type* boolType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
+
+		m_SymbolTable.PushScope();
+		defer(m_SymbolTable.PopScope());
+
+		bool success = true;
+
+		if (!AnalyzeStatement(stmt->forStmt.init))
+			success = false;
+
+		if (!AnalyzeExpression(stmt->forStmt.condition, nullptr))
+		{
+			success = false;
+		}
+		else if (stmt->forStmt.condition->resolvedType != boolType)
+		{
+			m_Diagnostics->ReportError(stmt->forStmt.condition->span, m_TranslationUnit->file,
+			                           "For-statement condition must be of type 'bool', got '{}'", stmt->forStmt.condition->resolvedType->ToString());
+			success = false;
+		}
+
+		if (!AnalyzeExpression(stmt->forStmt.increment, nullptr))
+		{
+			success = false;
+		}
+		else if (!ExpressionHasSideEffect(stmt->forStmt.increment))
+		{
+			m_Diagnostics->ReportError(stmt->forStmt.increment->span, m_TranslationUnit->file, "For-statement increment expression has no effect");
+			success = false;
+		}
+
+		m_LoopDepth++;
+		if (!AnalyzeStatement(stmt->forStmt.body))
+			success = false;
+		m_LoopDepth--;
+
+		return success;
+	}
+
+	bool Sema::AnalyzeBreakStatement(Statement* stmt)
+	{
+		if (m_LoopDepth == 0)
+		{
+			m_Diagnostics->ReportError(stmt->span, m_TranslationUnit->file, "'break' statement is only allowed inside a loop");
+			return false;
+		}
+
+		return true;
+	}
+
+	bool Sema::AnalyzeContinueStatement(Statement* stmt)
+	{
+		if (m_LoopDepth == 0)
+		{
+			m_Diagnostics->ReportError(stmt->span, m_TranslationUnit->file, "'continue' statement is only allowed inside a loop");
+			return false;
+		}
+
+		return true;
 	}
 
 	bool Sema::AnalyzeDeclaration(Declaration* decl)
@@ -352,16 +501,14 @@ namespace Wandelt
 		if (!AnalyzeStatement(decl->function.body))
 			return false;
 
-		// For now this simple check is enough, TODO: we should eventually check that all code paths return a value if the return type is non-void
 		if (decl->function.returnType != Type::GetBuiltinType(BUILTIN_TYPE_VOID))
 		{
 			ASSERT(decl->function.body->type == STATEMENT_TYPE_BLOCK);
 
-			if (decl->function.body->block.statements.Length() == 0 ||
-			    decl->function.body->block.statements[decl->function.body->block.statements.Length() - 1]->type != STATEMENT_TYPE_RETURN)
+			if (!StatementAlwaysReturns(decl->function.body))
 			{
 				m_Diagnostics->ReportError(decl->span, m_TranslationUnit->file,
-				                           "Function '{}' with non-void return type must end with a return statement", decl->function.name);
+				                           "Function '{}' with non-void return type must return a value on every control path", decl->function.name);
 				return false;
 			}
 		}
@@ -683,7 +830,15 @@ namespace Wandelt
 			return false;
 		}
 
-		expr->resolvedType              = sym->type;
+		if (sym->kind == SYMBOL_KIND_FUNCTION)
+		{
+			expr->resolvedType = sym->type->fn.returnType;
+		}
+		else
+		{
+			expr->resolvedType = sym->type;
+		}
+
 		expr->identifier.declarationRef = sym->declarationRef;
 
 		return true;
@@ -776,7 +931,8 @@ namespace Wandelt
 
 		ASSERT(functionDecl->type == DECLARATION_TYPE_FUNCTION);
 
-		expr->resolvedType        = sym->type;
+		Type* functionType        = sym->type;
+		expr->resolvedType        = functionType->fn.returnType;
 		expr->call.declarationRef = functionDecl;
 
 		const u64 parameterCount = functionDecl->function.parameters.Length();
@@ -969,6 +1125,78 @@ namespace Wandelt
 
 		*argumentExpression = InjectCast(*argumentExpression, parameterType);
 		return true;
+	}
+
+	bool Sema::StatementAlwaysReturns(const Statement* stmt)
+	{
+		ASSERT(stmt);
+
+		switch (stmt->type)
+		{
+		case STATEMENT_TYPE_RETURN:
+			return true;
+
+		case STATEMENT_TYPE_BLOCK:
+			for (const Statement* inner : stmt->block.statements)
+			{
+				if (StatementAlwaysReturns(inner))
+					return true;
+			}
+			return false;
+
+		case STATEMENT_TYPE_IF:
+			if (stmt->ifStmt.elseBranch == nullptr)
+				return false;
+			return StatementAlwaysReturns(stmt->ifStmt.thenBlock) && StatementAlwaysReturns(stmt->ifStmt.elseBranch);
+
+		case STATEMENT_TYPE_INVALID:
+		case STATEMENT_TYPE_DECLARATION:
+		case STATEMENT_TYPE_EXPRESSION:
+		case STATEMENT_TYPE_WHILE:
+		case STATEMENT_TYPE_FOR:
+		case STATEMENT_TYPE_BREAK:
+		case STATEMENT_TYPE_CONTINUE:
+			return false;
+
+		case STATEMENT_TYPE_COUNT:
+			ASSERT(false, "Invalid statement type!");
+			return false;
+		}
+
+		ASSERT(false, "Unhandled statement type: %i", stmt->type);
+		return false;
+	}
+
+	bool Sema::ExpressionHasSideEffect(const Expression* expr)
+	{
+		ASSERT(expr);
+
+		switch (expr->type)
+		{
+		case EXPRESSION_TYPE_INVALID:
+			ASSERT(false, "Invalid expression type!");
+			return false;
+
+		case EXPRESSION_TYPE_CALL:
+		case EXPRESSION_TYPE_ASSIGNMENT:
+		case EXPRESSION_TYPE_INCDEC:
+			return true;
+
+		case EXPRESSION_TYPE_CONSTANT:
+		case EXPRESSION_TYPE_UNARY:
+		case EXPRESSION_TYPE_BINARY:
+		case EXPRESSION_TYPE_GROUP:
+		case EXPRESSION_TYPE_IDENTIFIER:
+		case EXPRESSION_TYPE_CAST:
+			return false;
+
+		case EXPRESSION_TYPE_COUNT:
+			ASSERT(false, "Invalid expression type!");
+			return false;
+		}
+
+		ASSERT(false, "Unhandled expression type: %i", expr->type);
+		return false;
 	}
 
 	Expression* Sema::InjectCast(Expression* inner, Type* target)

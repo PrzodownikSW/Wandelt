@@ -3,6 +3,9 @@
 namespace Wandelt
 {
 
+	static Allocator* g_TypeAllocator    = nullptr;
+	static Vector<Type*> g_FunctionTypes = {};
+
 	const char* TypeKindToCStr(TypeKind kind)
 	{
 		switch (kind)
@@ -23,6 +26,13 @@ namespace Wandelt
 		}
 
 		UNREACHABLE();
+	}
+
+	void Type::Initialize(Allocator* allocator)
+	{
+		g_TypeAllocator = allocator;
+
+		g_FunctionTypes = Vector<Type*>::Create(g_TypeAllocator, 8);
 	}
 
 	const char* BuiltinTypeKindToCStr(BuiltinTypeKind kind)
@@ -239,8 +249,28 @@ namespace Wandelt
 			return "<invalid>";
 		case TYPE_KIND_BUILTIN:
 			return BuiltinTypeKindToCStr(basic.kind);
-		case TYPE_KIND_FUNCTION:
-			return "<function>";
+		case TYPE_KIND_FUNCTION: {
+			std::string result = "fn(";
+			for (u64 i = 0; i < fn.params.Length(); i++)
+			{
+				if (i > 0)
+					result += ", ";
+
+				result += fn.params[i]->ToString();
+			}
+
+			if (fn.isVariadic)
+			{
+				if (!fn.params.IsEmpty())
+					result += ", ";
+
+				result += "...";
+			}
+
+			result += ") ";
+			result += fn.returnType->ToString();
+			return result;
+		}
 		case TYPE_KIND_COUNT:
 			ASSERT(false, "Invalid type kind");
 			return "<invalid>";
@@ -290,6 +320,59 @@ namespace Wandelt
 			return &g_builtinTypes[kind];
 
 		return nullptr;
+	}
+
+	static bool FunctionTypeMatches(Type* functionType, Type* returnType, const Vector<Type*>& paramTypes, bool isVariadic)
+	{
+		ASSERT(functionType != nullptr);
+		ASSERT(functionType->kind == TYPE_KIND_FUNCTION);
+
+		if (functionType->fn.returnType != returnType)
+			return false;
+
+		if (functionType->fn.isVariadic != isVariadic)
+			return false;
+
+		if (functionType->fn.params.Length() != paramTypes.Length())
+			return false;
+
+		for (u64 i = 0; i < paramTypes.Length(); i++)
+		{
+			if (functionType->fn.params[i] != paramTypes[i])
+				return false;
+		}
+
+		return true;
+	}
+
+	Type* Type::GetFunctionType(Type* returnType, const Vector<Type*>& paramTypes, bool isVariadic)
+	{
+		ASSERT(returnType != nullptr);
+		ASSERT(returnType->kind != TYPE_KIND_INVALID);
+
+		for (Type* functionType : g_FunctionTypes)
+		{
+			if (FunctionTypeMatches(functionType, returnType, paramTypes, isVariadic))
+				return functionType;
+		}
+
+		Type* functionType             = static_cast<Type*>(g_TypeAllocator->Alloc(sizeof(Type)));
+		functionType->kind             = TYPE_KIND_FUNCTION;
+		functionType->sizeInBytes      = sizeof(void*);
+		functionType->alignInBytes     = alignof(void*);
+		functionType->fn.returnType    = returnType;
+		functionType->fn.isVariadic    = isVariadic;
+		functionType->fn.params.m_Data = nullptr;
+
+		if (!paramTypes.IsEmpty())
+		{
+			functionType->fn.params = Vector<Type*>::Create(g_TypeAllocator, paramTypes.Length());
+			for (Type* paramType : paramTypes) functionType->fn.params.Push(paramType);
+		}
+
+		g_FunctionTypes.Push(functionType);
+
+		return functionType;
 	}
 
 	Type* Type::GetDefaultTypeForIntegerConstant(u64 value)

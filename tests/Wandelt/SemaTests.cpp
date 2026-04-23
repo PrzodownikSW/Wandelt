@@ -268,7 +268,7 @@ namespace Wandelt
 
 		ASSERT_FALSE(analyzed);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
-		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must end with a return statement"}))
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must return a value on every control path"}))
 			return;
 	}
 
@@ -906,6 +906,34 @@ namespace Wandelt
 			return;
 	}
 
+	TEST(BareIdentifierExpressionStatementReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn int main() { int x = 12; x; return 1; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0,
+		                              {Diagnostics::Severity::Error, 1u, 29u, "Expression statements without side effects are not allowed"}))
+			return;
+	}
+
+	TEST(BareBinaryExpressionStatementReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn int main() { int x = 12; x + 1; return 1; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0,
+		                              {Diagnostics::Severity::Error, 1u, 29u, "Expression statements without side effects are not allowed"}))
+			return;
+	}
+
 	TEST(CallResultRejectedWhenReturnNarrowsFromLong)
 	{
 		Diagnostics diag;
@@ -1126,6 +1154,457 @@ namespace Wandelt
 			return;
 	}
 
+	TEST(IfStatementWithBoolConditionAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { if true { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementWithBoolVariableConditionAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { bool cond = true; if cond { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementWithIntegerConditionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { if 1 { } }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 21u, "condition must be of type 'bool'"}))
+			return;
+	}
+
+	TEST(IfStatementAnalyzesThenAndElseBranches)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    if true { undef_a; } else { undef_b; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_TRUE(diag.CapturedCount() >= 2u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 15u, "undef_a"}))
+			return;
+		if (!AssertCapturedDiagnostic(&diag, 1, {Diagnostics::Severity::Error, 2u, 33u, "undef_b"}))
+			return;
+	}
+
+	TEST(IfStatementElseIfChainAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { if true { } else if 2 == 4 { } else { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IfStatementBranchVariableDoesNotLeakOutOfIf)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int main() {\n"
+		                                                                          "    if true { int inside = 1; }\n"
+		                                                                          "    return inside;\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 3u, 12u, "inside"}))
+			return;
+	}
+
+	TEST(NonVoidFunctionReturningOnlyInsideIfWithoutElseReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    if true { return 1; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must return a value on every control path"}))
+			return;
+	}
+
+	TEST(NonVoidFunctionReturningInBothIfAndElseAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    if true { return 1; } else { return 2; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(NonVoidFunctionReturningInEveryBranchOfIfElseIfElseAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    if true { return 1; } else if 2 == 4 { return 2; } else { return 3; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(NonVoidFunctionMissingReturnInTerminalElseReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    if true { return 1; } else if 2 == 4 { return 2; } else { }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must return a value on every control path"}))
+			return;
+	}
+
+	TEST(NonVoidFunctionWithTrailingReturnAfterPartialIfAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    if true { return 1; }\n"
+		                                                                          "    return 2;\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementWithBoolConditionAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { while true { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementWithBoolVariableConditionAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { bool cond = true; while cond { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(WhileStatementWithIntegerConditionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { while 1 { } }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 24u, "condition must be of type 'bool'"}))
+			return;
+	}
+
+	TEST(WhileStatementAnalyzesBody)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    while true { undef_body; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 18u, "undef_body"}))
+			return;
+	}
+
+	TEST(WhileStatementBodyVariableDoesNotLeakOut)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int main() {\n"
+		                                                                          "    while true { int inside = 1; }\n"
+		                                                                          "    return inside;\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 3u, 12u, "inside"}))
+			return;
+	}
+
+	TEST(BreakStatementInsideWhileAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { while true { break; } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ContinueStatementInsideWhileAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { while true { continue; } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(BreakStatementOutsideLoopReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { break; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 18u, "'break' statement is only allowed inside a loop"}))
+			return;
+	}
+
+	TEST(ContinueStatementOutsideLoopReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { continue; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 18u, "'continue' statement is only allowed inside a loop"}))
+			return;
+	}
+
+	TEST(BreakInsideIfInsideWhileAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { while true { if true { break; } } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(BreakInsideNestedWhileAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    while true { while false { break; } break; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(BreakAfterNestedWhileEndsOutsideInnerLoop)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    while true { }\n"
+		                                                                          "    break;\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 3u, 5u, "'break' statement is only allowed inside a loop"}))
+			return;
+	}
+
+	TEST(NonVoidFunctionWithWhileButNoReturnReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    while true { return 1; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must return a value on every control path"}))
+			return;
+	}
+
+	TEST(ForStatementWithBoolConditionAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { for int x = 0; x < 10; x++ { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementWithIntegerConditionReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn void main() { for int x = 0; 1; x++ { } }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 33u, "condition must be of type 'bool'"}))
+			return;
+	}
+
+	TEST(ForStatementIncrementWithoutSideEffectReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { for int x = 0; x < 10; x + 1 { } }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 41u, "increment expression has no effect"}))
+			return;
+	}
+
+	TEST(ForStatementInitVariableVisibleInConditionAndIncrementAndBody)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    for int x = 0; x < 10; x++ { x++; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 0u);
+	}
+
+	TEST(ForStatementInitVariableDoesNotLeakOut)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int main() {\n"
+		                                                                          "    for int x = 0; x < 10; x++ { }\n"
+		                                                                          "    return x;\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_TRUE(diag.CapturedCount() >= 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 3u, 12u, "x"}))
+			return;
+	}
+
+	TEST(BreakInsideForAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn void main() {\n"
+		                                                                          "    for int x = 0; x < 10; x++ {\n"
+		                                                                          "        if x == 5 { break; }\n"
+		                                                                          "    }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ContinueInsideForAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { for int x = 0; x < 10; x++ { continue; } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ForStatementWithExpressionInitAnalyzes)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { int x = 0; for x = 0; x < 10; x++ { } }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(NonVoidFunctionWithForButNoReturnReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int test() {\n"
+		                                                                          "    for int x = 0; x < 10; x++ { return x; }\n"
+		                                                                          "}",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 1u, "must return a value on every control path"}))
+			return;
+	}
+
 	TestResults RunSemaTests()
 	{
 		ResetTestCounters();
@@ -1188,6 +1667,8 @@ namespace Wandelt
 		RUN_TEST(DiscardedNonVoidCallAnalyzesSuccessfully);
 		RUN_TEST(VoidCallWithoutDiscardAnalyzesSuccessfully);
 		RUN_TEST(DiscardOnVoidCallReportsRedundantWarning);
+		RUN_TEST(BareIdentifierExpressionStatementReportsDiagnostic);
+		RUN_TEST(BareBinaryExpressionStatementReportsDiagnostic);
 
 		PrintSection("Name resolution and calls");
 		RUN_TEST(UndeclaredIdentifierInInitializerReportsDiagnostic);
@@ -1206,6 +1687,41 @@ namespace Wandelt
 		RUN_TEST(CallWithMissingNamedArgumentReportsDiagnostic);
 		RUN_TEST(RedundantCastReportsWarning);
 		RUN_TEST(InvalidCastReportsDiagnostic);
+
+		PrintSection("Control flow");
+		RUN_TEST(IfStatementWithBoolConditionAnalyzes);
+		RUN_TEST(IfStatementWithBoolVariableConditionAnalyzes);
+		RUN_TEST(IfStatementWithIntegerConditionReportsDiagnostic);
+		RUN_TEST(IfStatementAnalyzesThenAndElseBranches);
+		RUN_TEST(IfStatementElseIfChainAnalyzes);
+		RUN_TEST(IfStatementBranchVariableDoesNotLeakOutOfIf);
+		RUN_TEST(NonVoidFunctionReturningOnlyInsideIfWithoutElseReportsDiagnostic);
+		RUN_TEST(NonVoidFunctionReturningInBothIfAndElseAnalyzes);
+		RUN_TEST(NonVoidFunctionReturningInEveryBranchOfIfElseIfElseAnalyzes);
+		RUN_TEST(NonVoidFunctionMissingReturnInTerminalElseReportsDiagnostic);
+		RUN_TEST(NonVoidFunctionWithTrailingReturnAfterPartialIfAnalyzes);
+		RUN_TEST(WhileStatementWithBoolConditionAnalyzes);
+		RUN_TEST(WhileStatementWithBoolVariableConditionAnalyzes);
+		RUN_TEST(WhileStatementWithIntegerConditionReportsDiagnostic);
+		RUN_TEST(WhileStatementAnalyzesBody);
+		RUN_TEST(WhileStatementBodyVariableDoesNotLeakOut);
+		RUN_TEST(BreakStatementInsideWhileAnalyzes);
+		RUN_TEST(ContinueStatementInsideWhileAnalyzes);
+		RUN_TEST(BreakStatementOutsideLoopReportsDiagnostic);
+		RUN_TEST(ContinueStatementOutsideLoopReportsDiagnostic);
+		RUN_TEST(BreakInsideIfInsideWhileAnalyzes);
+		RUN_TEST(BreakInsideNestedWhileAnalyzes);
+		RUN_TEST(BreakAfterNestedWhileEndsOutsideInnerLoop);
+		RUN_TEST(NonVoidFunctionWithWhileButNoReturnReportsDiagnostic);
+		RUN_TEST(ForStatementWithBoolConditionAnalyzes);
+		RUN_TEST(ForStatementWithIntegerConditionReportsDiagnostic);
+		RUN_TEST(ForStatementIncrementWithoutSideEffectReportsDiagnostic);
+		RUN_TEST(ForStatementInitVariableVisibleInConditionAndIncrementAndBody);
+		RUN_TEST(ForStatementInitVariableDoesNotLeakOut);
+		RUN_TEST(BreakInsideForAnalyzes);
+		RUN_TEST(ContinueInsideForAnalyzes);
+		RUN_TEST(ForStatementWithExpressionInitAnalyzes);
+		RUN_TEST(NonVoidFunctionWithForButNoReturnReportsDiagnostic);
 
 		f64 totalMs = timer.GetElapsedMilliseconds();
 		return PrintTestSummary("Semantic analysis", totalMs);

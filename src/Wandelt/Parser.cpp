@@ -107,14 +107,29 @@ namespace Wandelt
 		return static_cast<Precedence>(static_cast<u32>(precedence) + 1u);
 	}
 
-	static bool IsStatementStarter(TokenType type)
+	static bool IsTopLevelOnlyDeclarationStarter(TokenType type)
 	{
 		switch (type)
 		{
 		case TOKEN_TYPE_PACKAGE_KEYWORD:
-		case TOKEN_TYPE_RETURN_KEYWORD:
 		case TOKEN_TYPE_FN_KEYWORD:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static bool IsInnerStatementStarter(TokenType type)
+	{
+		switch (type)
+		{
+		case TOKEN_TYPE_RETURN_KEYWORD:
 		case TOKEN_TYPE_DISCARD_KEYWORD:
+		case TOKEN_TYPE_IF_KEYWORD:
+		case TOKEN_TYPE_WHILE_KEYWORD:
+		case TOKEN_TYPE_FOR_KEYWORD:
+		case TOKEN_TYPE_BREAK_KEYWORD:
+		case TOKEN_TYPE_CONTINUE_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
 		case TOKEN_TYPE_PLUS_PLUS:
 		case TOKEN_TYPE_MINUS_MINUS:
@@ -122,6 +137,11 @@ namespace Wandelt
 		default:
 			return IsBuiltinTypeKeyword(type);
 		}
+	}
+
+	static bool IsTopLevelStatementStarter(TokenType type)
+	{
+		return IsInnerStatementStarter(type) || IsTopLevelOnlyDeclarationStarter(type);
 	}
 
 	Parser::Parser(Allocator* stmtAllocator, Allocator* declAllocator, Allocator* exprAllocator, Lexer* lexer, Diagnostics* diagnostics)
@@ -169,6 +189,21 @@ namespace Wandelt
 		case TOKEN_TYPE_FN_KEYWORD:
 			return ParseDeclarationStatement();
 
+		case TOKEN_TYPE_IF_KEYWORD:
+			return ParseIfStatement();
+
+		case TOKEN_TYPE_WHILE_KEYWORD:
+			return ParseWhileStatement();
+
+		case TOKEN_TYPE_FOR_KEYWORD:
+			return ParseForStatement();
+
+		case TOKEN_TYPE_BREAK_KEYWORD:
+			return ParseBreakStatement();
+
+		case TOKEN_TYPE_CONTINUE_KEYWORD:
+			return ParseContinueStatement();
+
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
 		case TOKEN_TYPE_PLUS_PLUS:
@@ -192,14 +227,23 @@ namespace Wandelt
 
 		switch (token.type)
 		{
-		case TOKEN_TYPE_PACKAGE_KEYWORD:
-			return ParseDeclarationStatement();
-
 		case TOKEN_TYPE_RETURN_KEYWORD:
 			return ParseReturnStatement();
 
-		case TOKEN_TYPE_FN_KEYWORD:
-			return ParseDeclarationStatement();
+		case TOKEN_TYPE_IF_KEYWORD:
+			return ParseIfStatement();
+
+		case TOKEN_TYPE_WHILE_KEYWORD:
+			return ParseWhileStatement();
+
+		case TOKEN_TYPE_FOR_KEYWORD:
+			return ParseForStatement();
+
+		case TOKEN_TYPE_BREAK_KEYWORD:
+			return ParseBreakStatement();
+
+		case TOKEN_TYPE_CONTINUE_KEYWORD:
+			return ParseContinueStatement();
 
 		case TOKEN_TYPE_DISCARD_KEYWORD:
 		case TOKEN_TYPE_IDENTIFIER:
@@ -210,6 +254,17 @@ namespace Wandelt
 		default:
 			if (IsBuiltinTypeKeyword(token.type))
 				return ParseDeclarationStatement();
+
+			// A top-level-only declaration misplaced inside a block: emit a single diagnostic and
+			// let ParseDeclaration consume the whole construct so the rest of the block can parse
+			// without cascading errors.
+			if (IsTopLevelOnlyDeclarationStarter(token.type))
+			{
+				m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "'{}' declarations are only allowed at the top level",
+				                           TokenTypeToCStr(token.type));
+				ParseDeclaration();
+				return &s_InvalidStmt;
+			}
 
 			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected a statement, but found '{}'", TokenTypeToCStr(token.type));
 			break;
@@ -317,6 +372,141 @@ namespace Wandelt
 			return &s_InvalidStmt;
 
 		stmt->span = Span::Extend(openBrace.span, closeBrace.span);
+
+		return stmt;
+	}
+
+	Statement* Parser::ParseIfStatement()
+	{
+		const Token ifToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_IF_KEYWORD))
+			return &s_InvalidStmt;
+
+		Statement* stmt         = m_StmtAllocator->Alloc<Statement>();
+		stmt->type              = STATEMENT_TYPE_IF;
+		stmt->ifStmt.elseBranch = nullptr;
+
+		stmt->ifStmt.condition = ParseExpression();
+		if (stmt->ifStmt.condition->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->ifStmt.thenBlock = ParseBlockStatement();
+		if (stmt->ifStmt.thenBlock->type == STATEMENT_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		Span endSpan = stmt->ifStmt.thenBlock->span;
+
+		if (m_Lexer->PeekToken().type == TOKEN_TYPE_ELSE_KEYWORD)
+		{
+			m_Lexer->EatToken();
+
+			if (m_Lexer->PeekToken().type == TOKEN_TYPE_IF_KEYWORD)
+				stmt->ifStmt.elseBranch = ParseIfStatement();
+			else
+				stmt->ifStmt.elseBranch = ParseBlockStatement();
+
+			if (stmt->ifStmt.elseBranch->type == STATEMENT_TYPE_INVALID)
+				return &s_InvalidStmt;
+
+			endSpan = stmt->ifStmt.elseBranch->span;
+		}
+
+		stmt->span = Span::Extend(ifToken.span, endSpan);
+
+		return stmt;
+	}
+
+	Statement* Parser::ParseWhileStatement()
+	{
+		const Token whileToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_WHILE_KEYWORD))
+			return &s_InvalidStmt;
+
+		Statement* stmt = m_StmtAllocator->Alloc<Statement>();
+		stmt->type      = STATEMENT_TYPE_WHILE;
+
+		stmt->whileStmt.condition = ParseExpression();
+		if (stmt->whileStmt.condition->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->whileStmt.body = ParseBlockStatement();
+		if (stmt->whileStmt.body->type == STATEMENT_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->span = Span::Extend(whileToken.span, stmt->whileStmt.body->span);
+
+		return stmt;
+	}
+
+	Statement* Parser::ParseForStatement()
+	{
+		const Token forToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_FOR_KEYWORD))
+			return &s_InvalidStmt;
+
+		Statement* stmt = m_StmtAllocator->Alloc<Statement>();
+		stmt->type      = STATEMENT_TYPE_FOR;
+
+		// init: variable declaration or expression statement; both consume their own trailing ';'.
+		const Token initToken = m_Lexer->PeekToken();
+		if (IsBuiltinTypeKeyword(initToken.type))
+			stmt->forStmt.init = ParseDeclarationStatement();
+		else
+			stmt->forStmt.init = ParseExpressionStatement();
+
+		if (stmt->forStmt.init->type == STATEMENT_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->forStmt.condition = ParseExpression();
+		if (stmt->forStmt.condition->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
+			return &s_InvalidStmt;
+
+		stmt->forStmt.increment = ParseExpression();
+		if (stmt->forStmt.increment->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->forStmt.body = ParseBlockStatement();
+		if (stmt->forStmt.body->type == STATEMENT_TYPE_INVALID)
+			return &s_InvalidStmt;
+
+		stmt->span = Span::Extend(forToken.span, stmt->forStmt.body->span);
+
+		return stmt;
+	}
+
+	Statement* Parser::ParseBreakStatement()
+	{
+		const Token breakToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_BREAK_KEYWORD))
+			return &s_InvalidStmt;
+
+		const Token semicolonToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
+			return &s_InvalidStmt;
+
+		Statement* stmt = m_StmtAllocator->Alloc<Statement>();
+		stmt->type      = STATEMENT_TYPE_BREAK;
+		stmt->span      = Span::Extend(breakToken.span, semicolonToken.span);
+
+		return stmt;
+	}
+
+	Statement* Parser::ParseContinueStatement()
+	{
+		const Token continueToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_CONTINUE_KEYWORD))
+			return &s_InvalidStmt;
+
+		const Token semicolonToken = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_SEMICOLON))
+			return &s_InvalidStmt;
+
+		Statement* stmt = m_StmtAllocator->Alloc<Statement>();
+		stmt->type      = STATEMENT_TYPE_CONTINUE;
+		stmt->span      = Span::Extend(continueToken.span, semicolonToken.span);
 
 		return stmt;
 	}
@@ -503,8 +693,8 @@ namespace Wandelt
 
 			// Consume non-structural tokens after diagnosing them here so recovery
 			// does not reinterpret the same token as the start of a new statement.
-			if (token.type != TOKEN_TYPE_SEMICOLON && token.type != TOKEN_TYPE_CLOSE_PAREN && token.type != TOKEN_TYPE_CLOSE_BRACE &&
-			    token.type != TOKEN_TYPE_EOF)
+			if (token.type != TOKEN_TYPE_SEMICOLON && token.type != TOKEN_TYPE_OPEN_BRACE && token.type != TOKEN_TYPE_CLOSE_PAREN &&
+			    token.type != TOKEN_TYPE_CLOSE_BRACE && token.type != TOKEN_TYPE_EOF)
 			{
 				m_Lexer->EatToken();
 			}
@@ -1036,7 +1226,8 @@ namespace Wandelt
 				break;
 			}
 
-			if (IsStatementStarter(type))
+			const bool isStarter = (scope == ParseScope::Block) ? IsInnerStatementStarter(type) : IsTopLevelStatementStarter(type);
+			if (isStarter)
 				return;
 
 			m_Lexer->EatToken();
@@ -1098,7 +1289,7 @@ namespace Wandelt
 		return true;
 	}
 
-	static_assert(TOKEN_TYPE_COUNT == 62,
+	static_assert(TOKEN_TYPE_COUNT == 68,
 	              "If you add a new token type, make sure to update the parse rules table below IN PROPER ORDER otherwise all hell will break loose");
 
 	// Rows = token type, each row = {prefix, infix, precedence}.
@@ -1110,6 +1301,12 @@ namespace Wandelt
 	    /* CAST_KEYWORD         */ {&Parser::ParseCastExpression, nullptr, PRECEDENCE_NONE},
 	    /* FN_KEYWORD           */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* DISCARD_KEYWORD      */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* IF_KEYWORD           */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* ELSE_KEYWORD         */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* WHILE_KEYWORD        */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* FOR_KEYWORD          */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* BREAK_KEYWORD        */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* CONTINUE_KEYWORD     */ {nullptr, nullptr, PRECEDENCE_NONE},
 
 	    /* ENTRYPOINT_DIRECTIVE */ {nullptr, nullptr, PRECEDENCE_NONE},
 
