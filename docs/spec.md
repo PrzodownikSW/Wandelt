@@ -116,6 +116,61 @@ rawptr
 
 `cstring` is intended for C interoperability and other APIs that expect a terminating `\0` byte.
 
+## Array types
+
+Wandelt supports first-class fixed-size arrays.
+
+Array types are written by appending one or more fixed lengths to an element type:
+
+```c
+int[4] values;
+int[4][4] matrix;
+int[2][4] table;
+```
+
+When multiple lengths are written, they are interpreted left-to-right as outermost to innermost.
+
+```c
+int[2][4] table;
+```
+
+means "an array of 2 elements, where each element is an array of 4 `int`s".
+
+So this is valid:
+
+```c
+int[2][4] table = [[1, 2, 3, 4], [5, 6, 7, 8]];
+```
+
+Arrays are first class:
+
+* they do not decay to pointers
+* assignment copies the whole array value
+* passing an array to a function copies it
+* returning an array from a function copies it
+
+Each array length must be a compile-time integer literal.
+
+## Slice types
+
+Wandelt also supports non-owning slice types.
+
+Slice types are written as `T[]`:
+
+```c
+int[] values;
+char[] bytes;
+```
+
+A slice is a view over contiguous elements. It does not own its storage.
+
+```c
+int[4] arr = [1, 2, 3, 4];
+int[] view = arr;
+```
+
+Internally, a slice is represented as a data pointer plus a length.
+
 ## Default values
 
 Variables declared without an explicit initial value are given their `default` value.
@@ -290,7 +345,7 @@ Ordering operators produce a `bool` result and require arithmetic operands.
 
 From highest to lowest precedence:
 
-* postfix `expr++`, `expr--`, and calls
+* postfix `expr++`, `expr--`, calls, and indexing
 * prefix unary `-`, `++expr`, `--expr`
 * `*`, `/`
 * `+`, `-`
@@ -308,6 +363,59 @@ Parentheses may be used to group an expression and override normal operator prec
 int x = (1 + 2) * 3;
 ```
 
+## Array literals
+
+Array literals are written with square brackets:
+
+```c
+int[4] arr = [1, 2, 3, 4];
+int[4][4] matrix = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]];
+```
+
+An array literal initializes a whole array value. The literal is checked against the expected array type from the surrounding context.
+
+Array literals must fully initialize the destination array.
+
+The last explicitly written element may be followed by `...` to fill the remaining elements with copies of that value:
+
+```c
+int[10] x = [1, 2, 3...];
+int[3][4] y = [[1, 3, 0...]...];
+```
+
+The fill form may only appear on the final explicit element.
+
+## Indexing
+
+Array indexing uses square brackets:
+
+```c
+int x = arr[0];
+matrix[1][2] = 7;
+```
+
+Slices use the same indexing syntax:
+
+```c
+int first = view[0];
+```
+
+The left operand must have an array or slice type. The index must have an integer type. The result type is the element type.
+
+## Intrinsics
+
+Compiler intrinsics use the `$name(...)` form.
+
+`$len(x)` returns the length of a fixed-size array or slice as `sz`:
+
+```c
+int[4] arr = [1, 2, 3, 4];
+int[] view = arr;
+
+sz a = $len(arr);
+sz b = $len(view);
+```
+
 ## Increment and decrement
 
 Wandelt supports both prefix and postfix increment and decrement:
@@ -317,7 +425,7 @@ Wandelt supports both prefix and postfix increment and decrement:
 y--;
 ```
 
-The operand must be a variable of arithmetic type. These expressions mutate the operand in place and have the same type as the operand.
+The operand must be an assignable arithmetic storage location. These expressions mutate the operand in place and have the same type as the operand.
 
 ## Assignment
 
@@ -326,7 +434,7 @@ Wandelt supports simple and compound assignment:
 * `=`
 * `+=`, `-=`, `*=`, `/=`
 
-The left-hand side of an assignment must be a variable.
+The left-hand side of an assignment must be an assignable storage location, such as a variable or an array indexing expression.
 
 For simple assignment, the right-hand side must have the same type as the target variable or be implicitly convertible to it:
 

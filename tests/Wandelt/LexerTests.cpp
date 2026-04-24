@@ -86,11 +86,12 @@ namespace Wandelt
 		Diagnostics diag;
 
 		const SingleTokenCase cases[] = {
-		    {"(", TOKEN_TYPE_OPEN_PAREN, "("},  {")", TOKEN_TYPE_CLOSE_PAREN, ")"}, {"{", TOKEN_TYPE_OPEN_BRACE, "{"},
-		    {"}", TOKEN_TYPE_CLOSE_BRACE, "}"}, {";", TOKEN_TYPE_SEMICOLON, ";"},   {",", TOKEN_TYPE_COMMA, ","},
-		    {"=", TOKEN_TYPE_EQUALS, "="},      {".", TOKEN_TYPE_DOT, "."},         {"+", TOKEN_TYPE_PLUS, "+"},
-		    {"-", TOKEN_TYPE_MINUS, "-"},       {"*", TOKEN_TYPE_STAR, "*"},        {"/", TOKEN_TYPE_SLASH, "/"},
-		    {">", TOKEN_TYPE_GREATER, ">"},     {"<", TOKEN_TYPE_LESS, "<"},
+		    {"(", TOKEN_TYPE_OPEN_PAREN, "("},    {")", TOKEN_TYPE_CLOSE_PAREN, ")"}, {"[", TOKEN_TYPE_OPEN_BRACKET, "["},
+		    {"]", TOKEN_TYPE_CLOSE_BRACKET, "]"}, {"{", TOKEN_TYPE_OPEN_BRACE, "{"},  {"}", TOKEN_TYPE_CLOSE_BRACE, "}"},
+		    {";", TOKEN_TYPE_SEMICOLON, ";"},     {",", TOKEN_TYPE_COMMA, ","},       {"=", TOKEN_TYPE_EQUALS, "="},
+		    {".", TOKEN_TYPE_DOT, "."},           {"+", TOKEN_TYPE_PLUS, "+"},        {"-", TOKEN_TYPE_MINUS, "-"},
+		    {"*", TOKEN_TYPE_STAR, "*"},          {"/", TOKEN_TYPE_SLASH, "/"},       {">", TOKEN_TYPE_GREATER, ">"},
+		    {"<", TOKEN_TYPE_LESS, "<"},          {"&", TOKEN_TYPE_AMPERSAND, "&"},   {"^", TOKEN_TYPE_CARET, "^"},
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -149,6 +150,7 @@ namespace Wandelt
 		    {"for", TOKEN_TYPE_FOR_KEYWORD, "for"},
 		    {"break", TOKEN_TYPE_BREAK_KEYWORD, "break"},
 		    {"continue", TOKEN_TYPE_CONTINUE_KEYWORD, "continue"},
+		    {"null", TOKEN_TYPE_NULL_KEYWORD, "null"},
 		    {"void", TOKEN_TYPE_VOID_KEYWORD, "void"},
 		    {"bool", TOKEN_TYPE_BOOL_KEYWORD, "bool"},
 		    {"char", TOKEN_TYPE_CHAR_KEYWORD, "char"},
@@ -201,6 +203,20 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(IntrinsicToken)
+	{
+		Diagnostics diag;
+		const char* source = "$len";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 2);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INTRINSIC);
+		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[0]), "$len");
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
 	TEST(KeywordPrefixesRemainIdentifiers)
 	{
 		Diagnostics diag;
@@ -208,7 +224,7 @@ namespace Wandelt
 		const char* cases[] = {
 		    "packageName", "returnValue", "castValue", "boolish",   "trueValue",   "false_alarm", "uintptr2",  "rawptrValue", "discarded",
 		    "intish",      "intptrly",    "longish",   "doublish",  "shortish",    "charish",     "stringish", "floatish",    "voidish",
-		    "rawptrish",   "whilest",     "whileLoop", "breakable", "continueish", "forloop",     "forward",
+		    "rawptrish",   "whilest",     "whileLoop", "breakable", "continueish", "forloop",     "forward",   "nullish",
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -282,7 +298,7 @@ namespace Wandelt
 		    {"!!", TOKEN_TYPE_BANG_BANG, "!!"},   {">=", TOKEN_TYPE_GREATER_EQUAL, ">="}, {"<=", TOKEN_TYPE_LESS_EQUAL, "<="},
 		    {"==", TOKEN_TYPE_EQUAL_EQUAL, "=="}, {"!=", TOKEN_TYPE_BANG_EQUAL, "!="},    {"+=", TOKEN_TYPE_PLUS_EQUAL, "+="},
 		    {"-=", TOKEN_TYPE_MINUS_EQUAL, "-="}, {"*=", TOKEN_TYPE_STAR_EQUAL, "*="},    {"/=", TOKEN_TYPE_SLASH_EQUAL, "/="},
-		    {"++", TOKEN_TYPE_PLUS_PLUS, "++"},   {"--", TOKEN_TYPE_MINUS_MINUS, "--"},
+		    {"++", TOKEN_TYPE_PLUS_PLUS, "++"},   {"--", TOKEN_TYPE_MINUS_MINUS, "--"},   {"...", TOKEN_TYPE_ELLIPSIS, "..."},
 		};
 
 		for (u32 index = 0; index < ArraySize(cases); index++)
@@ -561,6 +577,80 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(ArrayDeclarationTokenSequence)
+	{
+		Diagnostics diag;
+		const char* source             = "int[10] x = [1, 2, 3...];";
+		const ExpectedToken expected[] = {
+		    {TOKEN_TYPE_INT_KEYWORD, "int"}, {TOKEN_TYPE_OPEN_BRACKET, "["},  {TOKEN_TYPE_INTEGER, "10"},     {TOKEN_TYPE_CLOSE_BRACKET, "]"},
+		    {TOKEN_TYPE_IDENTIFIER, "x"},    {TOKEN_TYPE_EQUALS, "="},        {TOKEN_TYPE_OPEN_BRACKET, "["}, {TOKEN_TYPE_INTEGER, "1"},
+		    {TOKEN_TYPE_COMMA, ","},         {TOKEN_TYPE_INTEGER, "2"},       {TOKEN_TYPE_COMMA, ","},        {TOKEN_TYPE_INTEGER, "3"},
+		    {TOKEN_TYPE_ELLIPSIS, "..."},    {TOKEN_TYPE_CLOSE_BRACKET, "]"}, {TOKEN_TYPE_SEMICOLON, ";"},
+		};
+		TokenList tokens = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, (i32)ArraySize(expected) + 1);
+
+		for (u32 index = 0; index < ArraySize(expected); index++)
+		{
+			ASSERT_EQ(tokens.items[index].type, expected[index].type);
+			ASSERT_STR_EQ(TokenLexeme(source, tokens.items[index]), expected[index].lexeme);
+		}
+
+		ASSERT_EQ(tokens.items[ArraySize(expected)].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(PointerDeclarationTokenSequence)
+	{
+		Diagnostics diag;
+		const char* source             = "int^ ptr = &value; ptr^ = null;";
+		const ExpectedToken expected[] = {
+		    {TOKEN_TYPE_INT_KEYWORD, "int"}, {TOKEN_TYPE_CARET, "^"},          {TOKEN_TYPE_IDENTIFIER, "ptr"},    {TOKEN_TYPE_EQUALS, "="},
+		    {TOKEN_TYPE_AMPERSAND, "&"},     {TOKEN_TYPE_IDENTIFIER, "value"}, {TOKEN_TYPE_SEMICOLON, ";"},       {TOKEN_TYPE_IDENTIFIER, "ptr"},
+		    {TOKEN_TYPE_CARET, "^"},         {TOKEN_TYPE_EQUALS, "="},         {TOKEN_TYPE_NULL_KEYWORD, "null"}, {TOKEN_TYPE_SEMICOLON, ";"},
+		};
+		TokenList tokens = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, (i32)ArraySize(expected) + 1);
+
+		for (u32 index = 0; index < ArraySize(expected); index++)
+		{
+			ASSERT_EQ(tokens.items[index].type, expected[index].type);
+			ASSERT_STR_EQ(TokenLexeme(source, tokens.items[index]), expected[index].lexeme);
+		}
+
+		ASSERT_EQ(tokens.items[ArraySize(expected)].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(SliceLenTokenSequence)
+	{
+		Diagnostics diag;
+		const char* source             = "int[] view = arr; usz len = $len(view);";
+		const ExpectedToken expected[] = {
+		    {TOKEN_TYPE_INT_KEYWORD, "int"}, {TOKEN_TYPE_OPEN_BRACKET, "["}, {TOKEN_TYPE_CLOSE_BRACKET, "]"}, {TOKEN_TYPE_IDENTIFIER, "view"},
+		    {TOKEN_TYPE_EQUALS, "="},        {TOKEN_TYPE_IDENTIFIER, "arr"}, {TOKEN_TYPE_SEMICOLON, ";"},     {TOKEN_TYPE_USZ_KEYWORD, "usz"},
+		    {TOKEN_TYPE_IDENTIFIER, "len"},  {TOKEN_TYPE_EQUALS, "="},       {TOKEN_TYPE_INTRINSIC, "$len"},  {TOKEN_TYPE_OPEN_PAREN, "("},
+		    {TOKEN_TYPE_IDENTIFIER, "view"}, {TOKEN_TYPE_CLOSE_PAREN, ")"},  {TOKEN_TYPE_SEMICOLON, ";"},
+		};
+		TokenList tokens = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, (i32)ArraySize(expected) + 1);
+
+		for (u32 index = 0; index < ArraySize(expected); index++)
+		{
+			ASSERT_EQ(tokens.items[index].type, expected[index].type);
+			ASSERT_STR_EQ(TokenLexeme(source, tokens.items[index]), expected[index].lexeme);
+		}
+
+		ASSERT_EQ(tokens.items[ArraySize(expected)].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
 	TEST(LineCommentBetweenTokens)
 	{
 		Diagnostics diag;
@@ -658,6 +748,22 @@ namespace Wandelt
 		ASSERT_EQ(tokens.items[2].type, TOKEN_TYPE_IDENTIFIER);
 		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[2]), "bar");
 		ASSERT_EQ(tokens.items[3].type, TOKEN_TYPE_EOF);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IntegerFollowedByEllipsisTokenizesCorrectly)
+	{
+		Diagnostics diag;
+		const char* source = "3...";
+		TokenList tokens   = LexSource(alloc, source, &diag);
+
+		ASSERT_FALSE(tokens.truncated);
+		ASSERT_EQ(tokens.count, 3);
+		ASSERT_EQ(tokens.items[0].type, TOKEN_TYPE_INTEGER);
+		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[0]), "3");
+		ASSERT_EQ(tokens.items[1].type, TOKEN_TYPE_ELLIPSIS);
+		ASSERT_STR_EQ(TokenLexeme(source, tokens.items[1]), "...");
+		ASSERT_EQ(tokens.items[2].type, TOKEN_TYPE_EOF);
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -1296,6 +1402,7 @@ namespace Wandelt
 		RUN_TEST(Identifiers);
 		RUN_TEST(KeywordAndBuiltinTypeTokens);
 		RUN_TEST(DirectiveToken);
+		RUN_TEST(IntrinsicToken);
 		RUN_TEST(KeywordPrefixesRemainIdentifiers);
 		RUN_TEST(IntegerLiterals);
 		RUN_TEST(FloatingPointLiterals);
@@ -1307,7 +1414,11 @@ namespace Wandelt
 		RUN_TEST(MixedTokenSequence);
 		RUN_TEST(WhileLoopTokenSequence);
 		RUN_TEST(ForLoopTokenSequence);
+		RUN_TEST(ArrayDeclarationTokenSequence);
+		RUN_TEST(PointerDeclarationTokenSequence);
+		RUN_TEST(SliceLenTokenSequence);
 		RUN_TEST(DotFollowedByNonDigit);
+		RUN_TEST(IntegerFollowedByEllipsisTokenizesCorrectly);
 		RUN_TEST(LineCommentBetweenTokens);
 		RUN_TEST(MultiLineCommentBetweenTokens);
 		RUN_TEST(NestedMultiLineCommentBetweenTokens);

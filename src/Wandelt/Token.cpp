@@ -44,6 +44,9 @@ namespace Wandelt
 		case TOKEN_TYPE_CONTINUE_KEYWORD:
 			return "continue";
 
+		case TOKEN_TYPE_NULL_KEYWORD:
+			return "null";
+
 		case TOKEN_TYPE_ENTRYPOINT_DIRECTIVE:
 			return "#entrypoint";
 
@@ -110,6 +113,12 @@ namespace Wandelt
 		case TOKEN_TYPE_CLOSE_PAREN:
 			return ")";
 
+		case TOKEN_TYPE_OPEN_BRACKET:
+			return "[";
+
+		case TOKEN_TYPE_CLOSE_BRACKET:
+			return "]";
+
 		case TOKEN_TYPE_OPEN_BRACE:
 			return "{";
 
@@ -145,6 +154,12 @@ namespace Wandelt
 
 		case TOKEN_TYPE_LESS:
 			return "<";
+
+		case TOKEN_TYPE_AMPERSAND:
+			return "&";
+
+		case TOKEN_TYPE_CARET:
+			return "^";
 
 		case TOKEN_TYPE_SINGLE_QUOTE:
 			return "'";
@@ -184,6 +199,12 @@ namespace Wandelt
 
 		case TOKEN_TYPE_MINUS_MINUS:
 			return "--";
+
+		case TOKEN_TYPE_ELLIPSIS:
+			return "...";
+
+		case TOKEN_TYPE_INTRINSIC:
+			return "<intrinsic>";
 
 		case TOKEN_TYPE_IDENTIFIER:
 			return "<identifier>";

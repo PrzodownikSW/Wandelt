@@ -72,6 +72,72 @@ namespace Wandelt
 		return true;
 	}
 
+	inline bool AssertArrayType(Type* type, u64 expectedLength, Type** outElementType = nullptr)
+	{
+		if (type == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected array type, got null\n");
+			return false;
+		}
+
+		if (type->kind != TYPE_KIND_ARRAY)
+		{
+			WDT_RECORD_FAILURE("  expected array type kind %d, got %d\n", TYPE_KIND_ARRAY, type->kind);
+			return false;
+		}
+
+		if (type->array.length != expectedLength)
+		{
+			WDT_RECORD_FAILURE("  expected array length %llu, got %llu\n", expectedLength, type->array.length);
+			return false;
+		}
+
+		if (outElementType != nullptr)
+			*outElementType = type->array.elementType;
+
+		return true;
+	}
+
+	inline bool AssertPointerType(Type* type, Type** outPointeeType = nullptr)
+	{
+		if (type == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected pointer type, got null\n");
+			return false;
+		}
+
+		if (type->kind != TYPE_KIND_POINTER)
+		{
+			WDT_RECORD_FAILURE("  expected pointer type kind %d, got %d\n", TYPE_KIND_POINTER, type->kind);
+			return false;
+		}
+
+		if (outPointeeType != nullptr)
+			*outPointeeType = type->pointer.pointeeType;
+
+		return true;
+	}
+
+	inline bool AssertSliceType(Type* type, Type** outElementType = nullptr)
+	{
+		if (type == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected slice type, got null\n");
+			return false;
+		}
+
+		if (type->kind != TYPE_KIND_SLICE)
+		{
+			WDT_RECORD_FAILURE("  expected slice type kind %d, got %d\n", TYPE_KIND_SLICE, type->kind);
+			return false;
+		}
+
+		if (outElementType != nullptr)
+			*outElementType = type->slice.elementType;
+
+		return true;
+	}
+
 	inline bool AssertIdentifierExpression(Expression* expression, const char* expectedIdentifier)
 	{
 		if (expression == nullptr)
@@ -275,6 +341,29 @@ namespace Wandelt
 		return true;
 	}
 
+	inline bool AssertNullConstant(Expression* expression)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected null constant, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CONSTANT)
+		{
+			WDT_RECORD_FAILURE("  expected constant expression type %d, got %d\n", EXPRESSION_TYPE_CONSTANT, expression->type);
+			return false;
+		}
+
+		if (expression->constant.kind != CONSTANT_KIND_NULL)
+		{
+			WDT_RECORD_FAILURE("  expected null constant kind %d, got %d\n", CONSTANT_KIND_NULL, expression->constant.kind);
+			return false;
+		}
+
+		return true;
+	}
+
 	inline bool AssertCastExpression(Expression* expression, BuiltinTypeKind expectedTargetKind)
 	{
 		if (expression == nullptr)
@@ -297,6 +386,38 @@ namespace Wandelt
 			WDT_RECORD_FAILURE("  expected cast operand expression, got null\n");
 			return false;
 		}
+
+		return true;
+	}
+
+	inline bool AssertCastExpression(Expression* expression, Type** outTargetType)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected cast expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_CAST)
+		{
+			WDT_RECORD_FAILURE("  expected cast expression type %d, got %d\n", EXPRESSION_TYPE_CAST, expression->type);
+			return false;
+		}
+
+		if (expression->cast.targetType == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected cast target type, got null\n");
+			return false;
+		}
+
+		if (expression->cast.expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected cast operand expression, got null\n");
+			return false;
+		}
+
+		if (outTargetType != nullptr)
+			*outTargetType = expression->cast.targetType;
 
 		return true;
 	}
@@ -331,7 +452,7 @@ namespace Wandelt
 		return true;
 	}
 
-	inline bool AssertUnaryExpression(Expression* expression, UnaryOperator expectedOperator)
+	inline bool AssertUnaryExpression(Expression* expression, UnaryOperator expectedOperator, bool expectedPostfix = false)
 	{
 		if (expression == nullptr)
 		{
@@ -348,6 +469,12 @@ namespace Wandelt
 		if (expression->unary.op != expectedOperator)
 		{
 			WDT_RECORD_FAILURE("  expected unary operator %d, got %d\n", expectedOperator, expression->unary.op);
+			return false;
+		}
+
+		if (expression->unary.isPostfix != expectedPostfix)
+		{
+			WDT_RECORD_FAILURE("  expected unary isPostfix=%d, got %d\n", expectedPostfix, expression->unary.isPostfix);
 			return false;
 		}
 
@@ -470,6 +597,94 @@ namespace Wandelt
 		if (expression->assignment.left == nullptr || expression->assignment.right == nullptr)
 		{
 			WDT_RECORD_FAILURE("  expected assignment operands, got null\n");
+			return false;
+		}
+
+		return true;
+	}
+
+	inline bool AssertArrayLiteralExpression(Expression* expression, u64 expectedItemCount, bool expectedRepeatLastElement = false)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected array literal expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_ARRAY_LITERAL)
+		{
+			WDT_RECORD_FAILURE("  expected array literal expression type %d, got %d\n", EXPRESSION_TYPE_ARRAY_LITERAL, expression->type);
+			return false;
+		}
+
+		if (expression->arrayLiteral.items.Length() != expectedItemCount)
+		{
+			WDT_RECORD_FAILURE("  expected array literal with %llu items, got %llu\n", expectedItemCount, expression->arrayLiteral.items.Length());
+			return false;
+		}
+
+		if (expression->arrayLiteral.repeatLastElement != expectedRepeatLastElement)
+		{
+			WDT_RECORD_FAILURE("  expected repeatLastElement=%d, got %d\n", expectedRepeatLastElement, expression->arrayLiteral.repeatLastElement);
+			return false;
+		}
+
+		return true;
+	}
+
+	inline bool AssertIndexExpression(Expression* expression, Expression** outTarget = nullptr, Expression** outIndex = nullptr)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected index expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_INDEX)
+		{
+			WDT_RECORD_FAILURE("  expected index expression type %d, got %d\n", EXPRESSION_TYPE_INDEX, expression->type);
+			return false;
+		}
+
+		if (expression->index.target == nullptr || expression->index.index == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected index target and index expressions, got null\n");
+			return false;
+		}
+
+		if (outTarget != nullptr)
+			*outTarget = expression->index.target;
+
+		if (outIndex != nullptr)
+			*outIndex = expression->index.index;
+
+		return true;
+	}
+
+	inline bool AssertIntrinsicExpression(Expression* expression, IntrinsicKind expectedKind, u64 expectedArgumentCount = 0u)
+	{
+		if (expression == nullptr)
+		{
+			WDT_RECORD_FAILURE("  expected intrinsic expression, got null\n");
+			return false;
+		}
+
+		if (expression->type != EXPRESSION_TYPE_INTRINSIC)
+		{
+			WDT_RECORD_FAILURE("  expected intrinsic expression type %d, got %d\n", EXPRESSION_TYPE_INTRINSIC, expression->type);
+			return false;
+		}
+
+		if (expression->intrinsic.kind != expectedKind)
+		{
+			WDT_RECORD_FAILURE("  expected intrinsic kind %d, got %d\n", expectedKind, expression->intrinsic.kind);
+			return false;
+		}
+
+		if (expression->intrinsic.arguments.Length() != expectedArgumentCount)
+		{
+			WDT_RECORD_FAILURE("  expected intrinsic with %llu arguments, got %llu\n", expectedArgumentCount,
+			                   expression->intrinsic.arguments.Length());
 			return false;
 		}
 

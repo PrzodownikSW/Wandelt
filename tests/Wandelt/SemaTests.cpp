@@ -198,6 +198,24 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(NullLiteralAdoptsPointerTypeWithHint)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int^ ptr = null;", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		if (!AssertNullConstant(declaration->variable.initializer))
+			return;
+		if (!AssertPointerType(declaration->variable.initializer->resolvedType))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
 	TEST(ReturnStatementImplicitlyCastsToFunctionReturnType)
 	{
 		Diagnostics diag;
@@ -365,6 +383,45 @@ namespace Wandelt
 			return;
 	}
 
+	TEST(AddressOfExpressionProducesPointerType)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn int main() { int value = 1; int^ ptr = &value; return ptr^; }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration      = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* pointerDeclaration = GetFunctionBodyStatement(declaration, 1);
+		ASSERT_EQ(pointerDeclaration->type, STATEMENT_TYPE_DECLARATION);
+		if (!AssertUnaryExpression(pointerDeclaration->declaration.declaration->variable.initializer, UNARY_OPERATOR_ADDRESS_OF))
+			return;
+		if (!AssertPointerType(pointerDeclaration->declaration.declaration->variable.initializer->resolvedType))
+			return;
+
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 2);
+		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
+		if (!AssertUnaryExpression(returnStatement->returnStmt.expression, UNARY_OPERATOR_DEREF, true))
+			return;
+		if (!AssertBuiltinType(returnStatement->returnStmt.expression->resolvedType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DerefRejectsNonPointerOperand)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn int main() { int value = 1; return value^; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 39u, "requires a typed pointer operand"}))
+			return;
+	}
+
 	TEST(BinaryArithmeticExpressionResolvesToCommonType)
 	{
 		Diagnostics diag;
@@ -416,6 +473,28 @@ namespace Wandelt
 		ASSERT_EQ(diag.CapturedCount(), 1u);
 		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "requires matching operand types"}))
 			return;
+	}
+
+	TEST(PointerEqualityWithNullAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn bool is_null(int^ ptr) { return ptr == null; }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration   = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 0);
+		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
+		if (!AssertBinaryExpression(returnStatement->returnStmt.expression, BINARY_OPERATOR_EQ))
+			return;
+		if (!AssertBuiltinType(returnStatement->returnStmt.expression->resolvedType, BUILTIN_TYPE_BOOL))
+			return;
+		ASSERT_EQ(returnStatement->returnStmt.expression->binary.right->type, EXPRESSION_TYPE_CAST);
+		if (!AssertPointerType(returnStatement->returnStmt.expression->binary.right->cast.targetType))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
 	TEST(GroupExpressionPropagatesInnerType)
@@ -510,6 +589,40 @@ namespace Wandelt
 		ASSERT_FALSE(analyzed);
 		ASSERT_EQ(diag.CapturedCount(), 1u);
 		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 18u, "Left-hand side of assignment"}))
+			return;
+	}
+
+	TEST(DerefAssignmentAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { int value = 1; int^ ptr = &value; ptr^ = 3; }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration       = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* expressionStatement = GetFunctionBodyStatement(declaration, 2);
+		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		if (!AssertAssignmentExpression(expressionStatement->expression.expression, ASSIGNMENT_OPERATOR_PURE))
+			return;
+		if (!AssertUnaryExpression(expressionStatement->expression.expression->assignment.left, UNARY_OPERATOR_DEREF, true))
+			return;
+		if (!AssertBuiltinType(expressionStatement->expression.expression->assignment.left->resolvedType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(PointerArithmeticReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "int value = 1; int^ ptr = &value; int^ other = ptr + 1;", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 48u, "requires arithmetic operands"}))
 			return;
 	}
 
@@ -1605,6 +1718,275 @@ namespace Wandelt
 			return;
 	}
 
+	TEST(ArrayLiteralInitializerAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int[4] arr = [1, 2, 3, 4];", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Type* elementType        = nullptr;
+		if (!AssertArrayType(declaration->variable.type, 4u, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 4u))
+			return;
+		if (!AssertBuiltinType(declaration->variable.initializer->resolvedType->array.elementType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ArrayImplicitlyBorrowsToSliceVariable)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int[4] arr = [1, 2, 3, 4]; int[] view = arr;", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_EQ(translationUnit.statements.Length(), 2u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 1);
+		Type* targetType         = nullptr;
+		if (!AssertCastExpression(declaration->variable.initializer, &targetType))
+			return;
+		Type* elementType = nullptr;
+		if (!AssertSliceType(targetType, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertArrayType(declaration->variable.initializer->cast.expression->resolvedType, 4u, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ArrayLiteralFillSyntaxAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int[10] x = [1, 2, 3...];", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 3u, true))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(MultidimensionalArrayFillAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int[3][4] m = [[1, 3, 0...]...];", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 1u, true))
+			return;
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer->arrayLiteral.items[0], 3u, true))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ArrayParameterAndReturnAnalyzeSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn int[4] id(int[4] value) { return value; }\n"
+		                                                                          "int[4] arr = [1, 2, 3, 4];\n"
+		                                                                          "int[4] other = id(arr);",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(SliceParameterAcceptsArrayArgument)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn sz count(int[] values) { return $len(values); }\n"
+		                                                                          "int[4] arr = [1, 2, 3, 4];\n"
+		                                                                          "sz size = count(arr);",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 2);
+		if (!AssertCallExpression(declaration->variable.initializer, "count", 1u))
+			return;
+		Type* targetType = nullptr;
+		if (!AssertCastExpression(declaration->variable.initializer->call.arguments[0].expression, &targetType))
+			return;
+		Type* elementType = nullptr;
+		if (!AssertSliceType(targetType, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(AsymmetricMultidimensionalArrayAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn int main() { int[2][4] arr = [[1, 2, 3, 4], [5, 6, 7, 8]]; return arr[1][2]; }", &diag,
+		                                      &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration   = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 1);
+		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
+		if (!AssertIndexExpression(returnStatement->returnStmt.expression))
+			return;
+		if (!AssertBuiltinType(returnStatement->returnStmt.expression->resolvedType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IndexExpressionAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn int main() { int[4] arr = [1, 2, 3, 4]; return arr[0]; }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration   = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 1);
+		if (!AssertIndexExpression(returnStatement->returnStmt.expression))
+			return;
+		if (!AssertBuiltinType(returnStatement->returnStmt.expression->resolvedType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(SliceIndexExpressionAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed =
+		    ParseAndAnalyzeSource(alloc, "fn int first(int[] values) { return values[0]; } int[4] arr = [1, 2, 3, 4];", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		Declaration* declaration   = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 0);
+		if (!AssertIndexExpression(returnStatement->returnStmt.expression))
+			return;
+		if (!AssertBuiltinType(returnStatement->returnStmt.expression->resolvedType, BUILTIN_TYPE_INT))
+			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(LenIntrinsicAnalyzesForArrayAndSlice)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "fn sz a(int[] values) { return $len(values); }\n"
+		                                                                          "fn sz b() { int[4] arr = [1, 2, 3, 4]; return $len(arr); }",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+
+		Declaration* sliceFunction = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		Statement* sliceReturn     = GetFunctionBodyStatement(sliceFunction, 0);
+		Declaration* arrayFunction = GetDeclarationFromTopLevelStatement(&translationUnit, 1);
+		Statement* arrayReturn     = GetFunctionBodyStatement(arrayFunction, 1);
+
+		if (!AssertIntrinsicExpression(sliceReturn->returnStmt.expression, INTRINSIC_KIND_LEN, 1u))
+			return;
+		if (!AssertBuiltinType(sliceReturn->returnStmt.expression->resolvedType, BUILTIN_TYPE_SZ))
+			return;
+		if (!AssertIntrinsicExpression(arrayReturn->returnStmt.expression, INTRINSIC_KIND_LEN, 1u))
+			return;
+		if (!AssertBuiltinType(arrayReturn->returnStmt.expression->resolvedType, BUILTIN_TYPE_SZ))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IndexAssignmentAnalyzesSuccessfully)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = {};
+		bool analyzed = ParseAndAnalyzeSource(alloc, "fn void main() { int[4] arr = [1, 2, 3, 4]; arr[0] = 9; }", &diag, &translationUnit);
+
+		ASSERT_TRUE(analyzed);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ConstantOutOfBoundsArrayIndexReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc,
+		                                                        "int[4] arr = [1, 2, 3, 4];\n"
+		                                                                          "int _xxx = arr[4];",
+		                                                        &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 2u, 16u, "Array index 4 is out of bounds"}))
+			return;
+	}
+
+	TEST(ArrayLiteralWrongLengthReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int[4] arr = [1, 2, 3];", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 14u, "must initialize exactly 4 elements"}))
+			return;
+	}
+
+	TEST(ArrayLiteralWithoutArrayContextReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "int value = [1, 2, 3];", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 13u, "Array literal requires an expected array type"}))
+			return;
+	}
+
+	TEST(IndexingNonArrayReportsDiagnostic)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "fn int main() { int value = 1; return value[0]; }", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 39u, "requires an array or slice operand"}))
+			return;
+	}
+
+	TEST(LenIntrinsicRejectsNonArrayOrSliceArgument)
+	{
+		Diagnostics diag;
+		Diagnostics::CaptureScope capture(diag);
+		TranslationUnit translationUnit = {};
+		bool analyzed                   = ParseAndAnalyzeSource(alloc, "usz value = $len(12);", &diag, &translationUnit);
+
+		ASSERT_FALSE(analyzed);
+		ASSERT_EQ(diag.CapturedCount(), 1u);
+		if (!AssertCapturedDiagnostic(&diag, 0, {Diagnostics::Severity::Error, 1u, 18u, "requires an array or slice argument"}))
+			return;
+	}
+
 	TestResults RunSemaTests()
 	{
 		ResetTestCounters();
@@ -1627,6 +2009,7 @@ namespace Wandelt
 		RUN_TEST(CharacterConstantAdoptsCharType);
 		RUN_TEST(StringConstantAdoptsStringType);
 		RUN_TEST(StringLiteralAdoptsCStringTypeWithHint);
+		RUN_TEST(NullLiteralAdoptsPointerTypeWithHint);
 
 		PrintSection("Returns and conversions");
 		RUN_TEST(ReturnStatementImplicitlyCastsToFunctionReturnType);
@@ -1643,19 +2026,24 @@ namespace Wandelt
 		RUN_TEST(AbstractIntegerConstantCannotImplicitlyBindToInt);
 		RUN_TEST(UnaryNegationAdoptsHintedFloatType);
 		RUN_TEST(UnaryNegationRejectsBooleanOperand);
+		RUN_TEST(AddressOfExpressionProducesPointerType);
+		RUN_TEST(DerefRejectsNonPointerOperand);
 		RUN_TEST(BinaryArithmeticExpressionResolvesToCommonType);
 		RUN_TEST(BinaryComparisonExpressionResolvesToBool);
 		RUN_TEST(EqualityRejectsMismatchedTypes);
+		RUN_TEST(PointerEqualityWithNullAnalyzesSuccessfully);
 		RUN_TEST(GroupExpressionPropagatesInnerType);
 		RUN_TEST(PrefixIncDecExpressionAnalyzesSuccessfully);
 		RUN_TEST(IncDecRejectsNonVariableOperand);
 		RUN_TEST(AssignmentExpressionAnalyzesAsVoidAndCastsRightHandSide);
 		RUN_TEST(AssignmentRejectsNonVariableTarget);
+		RUN_TEST(DerefAssignmentAnalyzesSuccessfully);
 		RUN_TEST(ChainedAssignmentRejectsAssignmentRightHandSide);
 		RUN_TEST(AssignmentExpressionCannotInitializeVariable);
 		RUN_TEST(AssignmentExpressionCannotBeReturned);
 		RUN_TEST(AssignmentExpressionCannotBePassedAsCallArgument);
 		RUN_TEST(CompoundAssignmentExpressionAnalyzesSuccessfully);
+		RUN_TEST(PointerArithmeticReportsDiagnostic);
 		RUN_TEST(CompoundAssignmentRejectsNarrowingResult);
 		RUN_TEST(CallResultImplicitlyWidensToReturnType);
 		RUN_TEST(CallResultRejectedWhenReturnNarrowsFromLong);
@@ -1669,6 +2057,22 @@ namespace Wandelt
 		RUN_TEST(DiscardOnVoidCallReportsRedundantWarning);
 		RUN_TEST(BareIdentifierExpressionStatementReportsDiagnostic);
 		RUN_TEST(BareBinaryExpressionStatementReportsDiagnostic);
+		RUN_TEST(ArrayLiteralInitializerAnalyzesSuccessfully);
+		RUN_TEST(ArrayImplicitlyBorrowsToSliceVariable);
+		RUN_TEST(ArrayLiteralFillSyntaxAnalyzesSuccessfully);
+		RUN_TEST(MultidimensionalArrayFillAnalyzesSuccessfully);
+		RUN_TEST(ArrayParameterAndReturnAnalyzeSuccessfully);
+		RUN_TEST(SliceParameterAcceptsArrayArgument);
+		RUN_TEST(AsymmetricMultidimensionalArrayAnalyzesSuccessfully);
+		RUN_TEST(IndexExpressionAnalyzesSuccessfully);
+		RUN_TEST(SliceIndexExpressionAnalyzesSuccessfully);
+		RUN_TEST(IndexAssignmentAnalyzesSuccessfully);
+		RUN_TEST(LenIntrinsicAnalyzesForArrayAndSlice);
+		RUN_TEST(ConstantOutOfBoundsArrayIndexReportsDiagnostic);
+		RUN_TEST(ArrayLiteralWrongLengthReportsDiagnostic);
+		RUN_TEST(ArrayLiteralWithoutArrayContextReportsDiagnostic);
+		RUN_TEST(IndexingNonArrayReportsDiagnostic);
+		RUN_TEST(LenIntrinsicRejectsNonArrayOrSliceArgument);
 
 		PrintSection("Name resolution and calls");
 		RUN_TEST(UndeclaredIdentifierInInitializerReportsDiagnostic);

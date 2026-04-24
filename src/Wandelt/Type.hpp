@@ -12,6 +12,9 @@ namespace Wandelt
 
 		TYPE_KIND_BUILTIN,
 		TYPE_KIND_FUNCTION,
+		TYPE_KIND_ARRAY,
+		TYPE_KIND_SLICE,
+		TYPE_KIND_POINTER,
 
 		TYPE_KIND_COUNT,
 	};
@@ -42,6 +45,7 @@ namespace Wandelt
 		BUILTIN_TYPE_STRING,       // ptr to data and length
 		BUILTIN_TYPE_CSTRING,      // ptr to null-terminated data
 		BUILTIN_TYPE_RAWPTR,       // ptr to something
+		BUILTIN_TYPE_NULLPTR,      // compile-time-only null pointer literal type
 
 		BUILTIN_TYPE_COUNT,
 	};
@@ -74,6 +78,22 @@ namespace Wandelt
 		bool isVariadic;
 	};
 
+	struct ArrayType
+	{
+		struct Type* elementType;
+		u64 length;
+	};
+
+	struct PointerType
+	{
+		struct Type* pointeeType;
+	};
+
+	struct SliceType
+	{
+		struct Type* elementType;
+	};
+
 	struct Type
 	{
 	public:
@@ -86,6 +106,9 @@ namespace Wandelt
 	public:
 		inline bool IsBuiltinType() { return kind == TYPE_KIND_BUILTIN; }
 		inline bool IsFunctionType() { return kind == TYPE_KIND_FUNCTION; }
+		inline bool IsArrayType() { return kind == TYPE_KIND_ARRAY; }
+		inline bool IsSliceType() { return kind == TYPE_KIND_SLICE; }
+		inline bool IsPointerType() { return kind == TYPE_KIND_POINTER; }
 
 		inline u32 SizeOf() { return sizeInBytes; }
 		inline u32 AlignOf() { return alignInBytes; }
@@ -100,6 +123,9 @@ namespace Wandelt
 		inline bool IsString() { return HasFlag(TYPE_FLAG_STRING); }
 		inline bool IsArchDependent() { return HasFlag(TYPE_FLAG_ARCH_DEP); }
 		inline bool IsArithmetic() { return HasFlag(TYPE_FLAG_INTEGER) || HasFlag(TYPE_FLAG_FLOATING_POINT); }
+		inline bool IsRawPointer() { return IsBuiltinType() && basic.kind == BUILTIN_TYPE_RAWPTR; }
+		inline bool IsNullPtrType() { return IsBuiltinType() && basic.kind == BUILTIN_TYPE_NULLPTR; }
+		inline bool IsPointerLike() { return IsPointerType() || IsRawPointer(); }
 
 		static void Initialize(Allocator* allocator);
 
@@ -112,6 +138,9 @@ namespace Wandelt
 		static Type* GetBuiltinType(BuiltinTypeKind kind);
 		static Type* TryGetBuiltinType(BuiltinTypeKind kind);
 		static Type* GetFunctionType(Type* returnType, const Vector<Type*>& paramTypes, bool isVariadic);
+		static Type* GetArrayType(Type* elementType, u64 length);
+		static Type* GetSliceType(Type* elementType);
+		static Type* GetPointerType(Type* pointeeType);
 		static Type* GetDefaultTypeForIntegerConstant(u64 value);
 
 		static Type* GetImplicitCommonType(Type* a, Type* b);
@@ -125,6 +154,9 @@ namespace Wandelt
 		union {
 			BuiltinType basic;
 			FunctionType fn;
+			ArrayType array;
+			SliceType slice;
+			PointerType pointer;
 		};
 	};
 

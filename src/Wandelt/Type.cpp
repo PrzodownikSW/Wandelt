@@ -5,6 +5,9 @@ namespace Wandelt
 
 	static Allocator* g_TypeAllocator    = nullptr;
 	static Vector<Type*> g_FunctionTypes = {};
+	static Vector<Type*> g_ArrayTypes    = {};
+	static Vector<Type*> g_SliceTypes    = {};
+	static Vector<Type*> g_PointerTypes  = {};
 
 	const char* TypeKindToCStr(TypeKind kind)
 	{
@@ -20,6 +23,15 @@ namespace Wandelt
 		case TYPE_KIND_FUNCTION:
 			return "function";
 
+		case TYPE_KIND_ARRAY:
+			return "array";
+
+		case TYPE_KIND_SLICE:
+			return "slice";
+
+		case TYPE_KIND_POINTER:
+			return "pointer";
+
 		case TYPE_KIND_COUNT:
 			ASSERT(false, "Invalid type kind");
 			break;
@@ -33,6 +45,9 @@ namespace Wandelt
 		g_TypeAllocator = allocator;
 
 		g_FunctionTypes = Vector<Type*>::Create(g_TypeAllocator, 8);
+		g_ArrayTypes    = Vector<Type*>::Create(g_TypeAllocator, 8);
+		g_SliceTypes    = Vector<Type*>::Create(g_TypeAllocator, 8);
+		g_PointerTypes  = Vector<Type*>::Create(g_TypeAllocator, 8);
 	}
 
 	const char* BuiltinTypeKindToCStr(BuiltinTypeKind kind)
@@ -103,6 +118,9 @@ namespace Wandelt
 		case BUILTIN_TYPE_RAWPTR:
 			return "rawptr";
 
+		case BUILTIN_TYPE_NULLPTR:
+			return "null";
+
 		case BUILTIN_TYPE_COUNT:
 			ASSERT(false, "Invalid builtin type kind");
 			break;
@@ -122,34 +140,39 @@ namespace Wandelt
 #define IMPL CAST_KIND_IMPLICIT
 #define EXPL CAST_KIND_EXPLICIT
 
-	static_assert(BUILTIN_TYPE_COUNT == 21,
+	static_assert(BUILTIN_TYPE_COUNT == 22,
 	              "If you add a new builtin type, make sure to update the cast matrix below IN PROPER ORDER otherwise all hell will break loose");
+
+	// clang-format off
 
 	// Rows = from-type, cols = to-type.
 	static constexpr CastKind s_CastMatrix[BUILTIN_TYPE_COUNT][BUILTIN_TYPE_COUNT] = {
-	    //             INV   VOID  BOOL  CHAR  SHORT INT   LONG  SZ    IPTR  UCHR  USHT  UINT  ULNG  USZ   UIPT  ABINT FLT   DBL   STR   CSTR  RPTR
-	    /* VOID    */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE},
-	    /* INVALID */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE},
-	    /* BOOL    */ {NONE, NONE, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* CHAR    */ {NONE, NONE, EXPL, IMPL, IMPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* SHORT   */ {NONE, NONE, EXPL, EXPL, IMPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* INT     */ {NONE, NONE, EXPL, EXPL, EXPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* LONG    */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* SZ      */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* INTPTR  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* UCHAR   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* USHORT  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* UINT    */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* ULONG   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* USZ     */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* UINTPTR */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, NONE, EXPL, EXPL, NONE, NONE, NONE},
-	    /* ABINT   */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE, NONE, NONE, NONE, NONE},
-	    /* FLOAT   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, IMPL, IMPL, NONE, NONE, NONE},
-	    /* DOUBLE  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, IMPL, NONE, NONE, NONE},
-	    /* STRING  */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE, NONE},
-	    /* CSTRING */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE},
-	    /* RAWPTR  */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL},
+	    //             INV   VOID  BOOL  CHAR  SHORT INT   LONG  SZ    IPTR  UCHR  USHT  UINT  ULNG  USZ   UIPT  ABINT FLT   DBL   STR   CSTR  RPTR  NULL
+	    /* VOID    */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE},
+	    /* INVALID */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE},
+	    /* BOOL    */ {NONE, NONE, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* CHAR    */ {NONE, NONE, EXPL, IMPL, IMPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* SHORT   */ {NONE, NONE, EXPL, EXPL, IMPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* INT     */ {NONE, NONE, EXPL, EXPL, EXPL, IMPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* LONG    */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* SZ      */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* INTPTR  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* UCHAR   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* USHORT  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* UINT    */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* ULONG   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* USZ     */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, EXPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* UINTPTR */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, IMPL, NONE, EXPL, EXPL, NONE, NONE, NONE, NONE},
+	    /* ABINT   */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE, NONE, NONE, NONE, NONE, NONE},
+	    /* FLOAT   */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, IMPL, IMPL, NONE, NONE, NONE, NONE},
+	    /* DOUBLE  */ {NONE, NONE, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, EXPL, NONE, EXPL, IMPL, NONE, NONE, NONE, NONE},
+	    /* STRING  */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE, NONE, NONE},
+	    /* CSTRING */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE, NONE},
+	    /* RAWPTR  */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL, NONE},
+	    /* NULL    */ {NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE, IMPL},
 	};
+
+	// clang-format on
 
 #undef NONE
 #undef IMPL
@@ -164,6 +187,12 @@ namespace Wandelt
 
 		if (this->kind == TYPE_KIND_BUILTIN && this->basic.kind == BUILTIN_TYPE_ABSTRACT_INT)
 			return false;
+
+		if (this->IsNullPtrType() && other->IsPointerLike())
+			return true;
+
+		if (this->IsArrayType() && other->IsSliceType() && this->array.elementType == other->slice.elementType)
+			return true;
 
 		if (this->kind == TYPE_KIND_BUILTIN && other->kind == TYPE_KIND_BUILTIN)
 			return s_CastMatrix[this->basic.kind][other->basic.kind] == CAST_KIND_IMPLICIT;
@@ -181,6 +210,9 @@ namespace Wandelt
 		if (this->kind == TYPE_KIND_BUILTIN && this->basic.kind == BUILTIN_TYPE_ABSTRACT_INT)
 			return other->IsArithmetic();
 
+		if (this->IsNullPtrType() && other->IsPointerLike())
+			return true;
+
 		if (this->kind == TYPE_KIND_BUILTIN && other->kind == TYPE_KIND_BUILTIN)
 		{
 			CastKind c = s_CastMatrix[this->basic.kind][other->basic.kind];
@@ -192,7 +224,8 @@ namespace Wandelt
 
 	bool Type::CanRepresentIntegerConstant(u64 value) const
 	{
-		ASSERT(kind == TYPE_KIND_BUILTIN);
+		if (kind != TYPE_KIND_BUILTIN)
+			return false;
 
 		switch (basic.kind)
 		{
@@ -271,6 +304,24 @@ namespace Wandelt
 			result += fn.returnType->ToString();
 			return result;
 		}
+		case TYPE_KIND_ARRAY: {
+			std::vector<u64> dimensions = {};
+			const Type* current         = this;
+			while (current->kind == TYPE_KIND_ARRAY)
+			{
+				dimensions.push_back(current->array.length);
+				current = current->array.elementType;
+			}
+
+			std::string result = current->ToString();
+			for (u64 dimension : dimensions) result += "[" + std::to_string(dimension) + "]";
+
+			return result;
+		}
+		case TYPE_KIND_SLICE:
+			return slice.elementType->ToString() + "[]";
+		case TYPE_KIND_POINTER:
+			return pointer.pointeeType->ToString() + "^";
 		case TYPE_KIND_COUNT:
 			ASSERT(false, "Invalid type kind");
 			return "<invalid>";
@@ -280,7 +331,7 @@ namespace Wandelt
 	}
 
 	static_assert(
-	    BUILTIN_TYPE_COUNT == 21,
+	    BUILTIN_TYPE_COUNT == 22,
 	    "If you add a new builtin type, make sure to update the g_builtinTypes array below IN PROPER ORDER otherwise all hell will break loose");
 
 	// no array designators in c++ ...
@@ -306,6 +357,7 @@ namespace Wandelt
 	    /* STRING  */ Type(BUILTIN_TYPE_STRING, sizeof(void*) + sizeof(u64), alignof(void*), TYPE_FLAG_STRING),
 	    /* CSTRING */ Type(BUILTIN_TYPE_CSTRING, sizeof(void*), alignof(void*), TYPE_FLAG_STRING),
 	    /* RAWPTR  */ Type(BUILTIN_TYPE_RAWPTR, sizeof(void*), alignof(void*), 0),
+	    /* NULLPTR */ Type(BUILTIN_TYPE_NULLPTR, 0, 1, 0),
 	};
 
 	Type* Type::GetBuiltinType(BuiltinTypeKind kind)
@@ -345,6 +397,22 @@ namespace Wandelt
 		return true;
 	}
 
+	static bool ArrayTypeMatches(Type* arrayType, Type* elementType, u64 length)
+	{
+		ASSERT(arrayType != nullptr);
+		ASSERT(arrayType->kind == TYPE_KIND_ARRAY);
+
+		return arrayType->array.elementType == elementType && arrayType->array.length == length;
+	}
+
+	static bool SliceTypeMatches(Type* sliceType, Type* elementType)
+	{
+		ASSERT(sliceType != nullptr);
+		ASSERT(sliceType->kind == TYPE_KIND_SLICE);
+
+		return sliceType->slice.elementType == elementType;
+	}
+
 	Type* Type::GetFunctionType(Type* returnType, const Vector<Type*>& paramTypes, bool isVariadic)
 	{
 		ASSERT(returnType != nullptr);
@@ -373,6 +441,84 @@ namespace Wandelt
 		g_FunctionTypes.Push(functionType);
 
 		return functionType;
+	}
+
+	Type* Type::GetArrayType(Type* elementType, u64 length)
+	{
+		ASSERT(elementType != nullptr);
+		ASSERT(elementType->kind != TYPE_KIND_INVALID);
+
+		for (Type* arrayType : g_ArrayTypes)
+		{
+			if (ArrayTypeMatches(arrayType, elementType, length))
+				return arrayType;
+		}
+
+		const u64 sizeInBytes = static_cast<u64>(elementType->sizeInBytes) * length;
+		ASSERT(sizeInBytes <= std::numeric_limits<u32>::max(), "Array type is too large");
+
+		Type* arrayType              = static_cast<Type*>(g_TypeAllocator->Alloc(sizeof(Type)));
+		arrayType->kind              = TYPE_KIND_ARRAY;
+		arrayType->sizeInBytes       = static_cast<u32>(sizeInBytes);
+		arrayType->alignInBytes      = elementType->alignInBytes;
+		arrayType->array.length      = length;
+		arrayType->array.elementType = elementType;
+
+		g_ArrayTypes.Push(arrayType);
+
+		return arrayType;
+	}
+
+	Type* Type::GetSliceType(Type* elementType)
+	{
+		ASSERT(elementType != nullptr);
+		ASSERT(elementType->kind != TYPE_KIND_INVALID);
+
+		for (Type* sliceType : g_SliceTypes)
+		{
+			if (SliceTypeMatches(sliceType, elementType))
+				return sliceType;
+		}
+
+		Type* sliceType              = static_cast<Type*>(g_TypeAllocator->Alloc(sizeof(Type)));
+		sliceType->kind              = TYPE_KIND_SLICE;
+		sliceType->sizeInBytes       = sizeof(void*) + sizeof(u64);
+		sliceType->alignInBytes      = alignof(void*);
+		sliceType->slice.elementType = elementType;
+
+		g_SliceTypes.Push(sliceType);
+
+		return sliceType;
+	}
+
+	static bool PointerTypeMatches(Type* pointerType, Type* pointeeType)
+	{
+		ASSERT(pointerType != nullptr);
+		ASSERT(pointerType->kind == TYPE_KIND_POINTER);
+
+		return pointerType->pointer.pointeeType == pointeeType;
+	}
+
+	Type* Type::GetPointerType(Type* pointeeType)
+	{
+		ASSERT(pointeeType != nullptr);
+		ASSERT(pointeeType->kind != TYPE_KIND_INVALID);
+
+		for (Type* pointerType : g_PointerTypes)
+		{
+			if (PointerTypeMatches(pointerType, pointeeType))
+				return pointerType;
+		}
+
+		Type* pointerType                = static_cast<Type*>(g_TypeAllocator->Alloc(sizeof(Type)));
+		pointerType->kind                = TYPE_KIND_POINTER;
+		pointerType->sizeInBytes         = sizeof(void*);
+		pointerType->alignInBytes        = alignof(void*);
+		pointerType->pointer.pointeeType = pointeeType;
+
+		g_PointerTypes.Push(pointerType);
+
+		return pointerType;
 	}
 
 	Type* Type::GetDefaultTypeForIntegerConstant(u64 value)

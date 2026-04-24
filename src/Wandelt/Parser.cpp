@@ -101,6 +101,20 @@ namespace Wandelt
 		return type == TOKEN_TYPE_PLUS_PLUS || type == TOKEN_TYPE_MINUS_MINUS;
 	}
 
+	static bool TryParseIntegerTokenLexeme(const File* file, const Token& token, u64* outValue)
+	{
+		ASSERT(file != nullptr);
+		ASSERT(outValue != nullptr);
+		ASSERT(token.type == TOKEN_TYPE_INTEGER);
+
+		const StringView lexeme = file->GetViewOverPartOfContent(token.span.begin, token.span.end - token.span.begin);
+		const char* first       = lexeme.Data();
+		const char* last        = first + lexeme.Length();
+
+		std::from_chars_result result = std::from_chars(first, last, *outValue);
+		return result.ec == std::errc{} && result.ptr == last;
+	}
+
 	static Precedence GetNextHigherPrecedence(Precedence precedence)
 	{
 		ASSERT(precedence < PRECEDENCE_PRIMARY);
@@ -130,9 +144,11 @@ namespace Wandelt
 		case TOKEN_TYPE_FOR_KEYWORD:
 		case TOKEN_TYPE_BREAK_KEYWORD:
 		case TOKEN_TYPE_CONTINUE_KEYWORD:
+		case TOKEN_TYPE_INTRINSIC:
 		case TOKEN_TYPE_IDENTIFIER:
 		case TOKEN_TYPE_PLUS_PLUS:
 		case TOKEN_TYPE_MINUS_MINUS:
+		case TOKEN_TYPE_AMPERSAND:
 			return true;
 		default:
 			return IsBuiltinTypeKeyword(type);
@@ -205,6 +221,7 @@ namespace Wandelt
 			return ParseContinueStatement();
 
 		case TOKEN_TYPE_DISCARD_KEYWORD:
+		case TOKEN_TYPE_INTRINSIC:
 		case TOKEN_TYPE_IDENTIFIER:
 		case TOKEN_TYPE_PLUS_PLUS:
 		case TOKEN_TYPE_MINUS_MINUS:
@@ -246,6 +263,7 @@ namespace Wandelt
 			return ParseContinueStatement();
 
 		case TOKEN_TYPE_DISCARD_KEYWORD:
+		case TOKEN_TYPE_INTRINSIC:
 		case TOKEN_TYPE_IDENTIFIER:
 		case TOKEN_TYPE_PLUS_PLUS:
 		case TOKEN_TYPE_MINUS_MINUS:
@@ -756,7 +774,8 @@ namespace Wandelt
 			// Consume non-structural tokens after diagnosing them here so recovery
 			// does not reinterpret the same token as the start of a new statement.
 			if (token.type != TOKEN_TYPE_SEMICOLON && token.type != TOKEN_TYPE_OPEN_BRACE && token.type != TOKEN_TYPE_CLOSE_PAREN &&
-			    token.type != TOKEN_TYPE_CLOSE_BRACE && token.type != TOKEN_TYPE_EOF)
+			    token.type != TOKEN_TYPE_CLOSE_BRACE && token.type != TOKEN_TYPE_CLOSE_BRACKET && token.type != TOKEN_TYPE_ELLIPSIS &&
+			    token.type != TOKEN_TYPE_EOF)
 			{
 				m_Lexer->EatToken();
 			}
@@ -879,6 +898,10 @@ namespace Wandelt
 			expr->constant.stringValue = StringView{lexeme.Data() + 1, lexeme.Length() - 2};
 			break;
 
+		case TOKEN_TYPE_NULL_KEYWORD:
+			expr->constant.kind = CONSTANT_KIND_NULL;
+			break;
+
 		default:
 			return &s_InvalidExpr;
 		}
@@ -917,6 +940,18 @@ namespace Wandelt
 		return expr;
 	}
 
+	static IntrinsicKind IntrinsicKindFromToken(const File* file, const Token& token)
+	{
+		ASSERT(file != nullptr);
+		ASSERT(token.type == TOKEN_TYPE_INTRINSIC);
+
+		const StringView lexeme = file->GetViewOverPartOfContent(token.span.begin, token.span.end - token.span.begin);
+		if (lexeme == "$len")
+			return INTRINSIC_KIND_LEN;
+
+		return INTRINSIC_KIND_INVALID;
+	}
+
 	Expression* Parser::ParseUnaryExpression()
 	{
 		const Token operatorToken = m_Lexer->PeekToken();
@@ -928,6 +963,10 @@ namespace Wandelt
 		{
 		case TOKEN_TYPE_MINUS:
 			op = UNARY_OPERATOR_NEGATE;
+			break;
+
+		case TOKEN_TYPE_AMPERSAND:
+			op = UNARY_OPERATOR_ADDRESS_OF;
 			break;
 
 		default:
@@ -946,8 +985,9 @@ namespace Wandelt
 		expr->type       = EXPRESSION_TYPE_UNARY;
 		expr->span       = Span::Extend(operatorToken.span, operand->span);
 
-		expr->unary.op      = op;
-		expr->unary.operand = operand;
+		expr->unary.op        = op;
+		expr->unary.operand   = operand;
+		expr->unary.isPostfix = false;
 
 		return expr;
 	}
@@ -1009,6 +1049,50 @@ namespace Wandelt
 		return expr;
 	}
 
+	Expression* Parser::ParseArrayLiteralExpression()
+	{
+		const Token openBracket = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_OPEN_BRACKET))
+			return &s_InvalidExpr;
+
+		Expression* expr                     = m_ExprAllocator->Alloc<Expression>();
+		expr->type                           = EXPRESSION_TYPE_ARRAY_LITERAL;
+		expr->arrayLiteral.items             = Vector<Expression*>::Create(m_ExprAllocator, 4);
+		expr->arrayLiteral.repeatLastElement = false;
+
+		if (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_BRACKET)
+		{
+			while (true)
+			{
+				Expression* item = ParseExpression();
+				if (item->type == EXPRESSION_TYPE_INVALID)
+					return &s_InvalidExpr;
+
+				expr->arrayLiteral.items.Push(item);
+
+				if (m_Lexer->PeekToken().type == TOKEN_TYPE_ELLIPSIS)
+				{
+					m_Lexer->EatToken();
+					expr->arrayLiteral.repeatLastElement = true;
+					break;
+				}
+
+				if (m_Lexer->PeekToken().type != TOKEN_TYPE_COMMA)
+					break;
+
+				if (!ParseToken(TOKEN_TYPE_COMMA))
+					return &s_InvalidExpr;
+			}
+		}
+
+		const Token closeBracket = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_CLOSE_BRACKET))
+			return &s_InvalidExpr;
+
+		expr->span = Span::Extend(openBracket.span, closeBracket.span);
+		return expr;
+	}
+
 	Expression* Parser::ParseIdentifierExpression()
 	{
 		const Token token = m_Lexer->PeekToken();
@@ -1022,6 +1106,68 @@ namespace Wandelt
 		if (!ParseIdentifier(&expr->identifier.name))
 			return &s_InvalidExpr;
 
+		return expr;
+	}
+
+	Expression* Parser::ParseIntrinsicExpression()
+	{
+		const Token token = m_Lexer->PeekToken();
+		if (token.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		if (token.type != TOKEN_TYPE_INTRINSIC)
+		{
+			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Expected an intrinsic, but found '{}'", TokenTypeToCStr(token.type));
+			return &s_InvalidExpr;
+		}
+
+		const IntrinsicKind intrinsicKind = IntrinsicKindFromToken(m_Lexer->GetFile(), token);
+		if (intrinsicKind == INTRINSIC_KIND_INVALID)
+		{
+			const StringView lexeme = m_Lexer->GetFile()->GetViewOverPartOfContent(token.span.begin, token.span.end - token.span.begin);
+			m_Lexer->EatToken();
+			m_Diagnostics->ReportError(token.span, m_Lexer->GetFile(), "Unknown intrinsic '{}'", lexeme);
+			return &s_InvalidExpr;
+		}
+
+		m_Lexer->EatToken();
+
+		if (!ParseToken(TOKEN_TYPE_OPEN_PAREN))
+			return &s_InvalidExpr;
+
+		Expression* expr                 = m_ExprAllocator->Alloc<Expression>();
+		expr->type                       = EXPRESSION_TYPE_INTRINSIC;
+		expr->intrinsic.kind             = intrinsicKind;
+		expr->intrinsic.arguments.m_Data = nullptr;
+
+		if (m_Lexer->PeekToken().type != TOKEN_TYPE_CLOSE_PAREN)
+		{
+			expr->intrinsic.arguments = Vector<Expression*>::Create(m_ExprAllocator, 2);
+
+			while (true)
+			{
+				Expression* argument = ParseExpression();
+				if (argument->type == EXPRESSION_TYPE_INVALID)
+					return &s_InvalidExpr;
+
+				expr->intrinsic.arguments.Push(argument);
+
+				if (m_Lexer->PeekToken().type != TOKEN_TYPE_COMMA)
+					break;
+
+				if (!ParseToken(TOKEN_TYPE_COMMA))
+					return &s_InvalidExpr;
+			}
+		}
+
+		const Token closeParen = m_Lexer->PeekToken();
+		if (closeParen.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		if (!ParseToken(TOKEN_TYPE_CLOSE_PAREN))
+			return &s_InvalidExpr;
+
+		expr->span = Span::Extend(token.span, closeParen.span);
 		return expr;
 	}
 
@@ -1116,6 +1262,28 @@ namespace Wandelt
 		return expr;
 	}
 
+	Expression* Parser::ParseDerefExpression(Expression* left)
+	{
+		ASSERT(left != nullptr);
+
+		const Token operatorToken = m_Lexer->PeekToken();
+		if (operatorToken.type == TOKEN_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		if (!ParseToken(TOKEN_TYPE_CARET))
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_UNARY;
+		expr->span       = Span::Extend(left->span, operatorToken.span);
+
+		expr->unary.op        = UNARY_OPERATOR_DEREF;
+		expr->unary.operand   = left;
+		expr->unary.isPostfix = true;
+
+		return expr;
+	}
+
 	Expression* Parser::ParseCallExpression(Expression* left)
 	{
 		if (left->type != EXPRESSION_TYPE_IDENTIFIER)
@@ -1189,6 +1357,31 @@ namespace Wandelt
 		return expr;
 	}
 
+	Expression* Parser::ParseIndexExpression(Expression* left)
+	{
+		ASSERT(left != nullptr);
+
+		if (!ParseToken(TOKEN_TYPE_OPEN_BRACKET))
+			return &s_InvalidExpr;
+
+		Expression* index = ParseExpression();
+		if (index->type == EXPRESSION_TYPE_INVALID)
+			return &s_InvalidExpr;
+
+		const Token closeBracket = m_Lexer->PeekToken();
+		if (!ParseToken(TOKEN_TYPE_CLOSE_BRACKET))
+			return &s_InvalidExpr;
+
+		Expression* expr = m_ExprAllocator->Alloc<Expression>();
+		expr->type       = EXPRESSION_TYPE_INDEX;
+		expr->span       = Span::Extend(left->span, closeBracket.span);
+
+		expr->index.target = left;
+		expr->index.index  = index;
+
+		return expr;
+	}
+
 	bool Parser::ParseCallArgument(CallExpression::Argument* outArgument, bool* outIsNamed)
 	{
 		ASSERT(outArgument != nullptr);
@@ -1255,8 +1448,9 @@ namespace Wandelt
 
 	void Parser::RecoverFromError(ParseScope scope)
 	{
-		i32 braceDepth = 0;
-		i32 parenDepth = 0;
+		i32 braceDepth   = 0;
+		i32 parenDepth   = 0;
+		i32 bracketDepth = 0;
 
 		while (true)
 		{
@@ -1265,7 +1459,7 @@ namespace Wandelt
 			if (type == TOKEN_TYPE_EOF)
 				return;
 
-			if (braceDepth > 0 || parenDepth > 0)
+			if (braceDepth > 0 || parenDepth > 0 || bracketDepth > 0)
 			{
 				switch (type)
 				{
@@ -1282,6 +1476,13 @@ namespace Wandelt
 				case TOKEN_TYPE_CLOSE_PAREN:
 					if (parenDepth > 0)
 						parenDepth--;
+					break;
+				case TOKEN_TYPE_OPEN_BRACKET:
+					bracketDepth++;
+					break;
+				case TOKEN_TYPE_CLOSE_BRACKET:
+					if (bracketDepth > 0)
+						bracketDepth--;
 					break;
 				default:
 					break;
@@ -1306,11 +1507,20 @@ namespace Wandelt
 				m_Lexer->EatToken();
 				continue;
 
+			case TOKEN_TYPE_OPEN_BRACKET:
+				bracketDepth++;
+				m_Lexer->EatToken();
+				continue;
+
 			case TOKEN_TYPE_CLOSE_BRACE:
 				// In a block: leave it for the enclosing ParseBlockStatement to consume.
 				// At top level: stray brace — eat it and keep scanning.
 				if (scope == ParseScope::Block)
 					return;
+				m_Lexer->EatToken();
+				continue;
+
+			case TOKEN_TYPE_CLOSE_BRACKET:
 				m_Lexer->EatToken();
 				continue;
 
@@ -1380,14 +1590,78 @@ namespace Wandelt
 		}
 
 		Type* type = Type::GetBuiltinType(builtinType);
-		*outType   = type;
-
 		m_Lexer->EatToken();
 
+		while (true)
+		{
+			const Token suffixToken = m_Lexer->PeekToken();
+			if (suffixToken.type == TOKEN_TYPE_CARET)
+			{
+				m_Lexer->EatToken();
+				type = Type::GetPointerType(type);
+				continue;
+			}
+
+			if (suffixToken.type != TOKEN_TYPE_OPEN_BRACKET)
+				break;
+
+			if (m_Lexer->PeekTokenAtOffset(1).type == TOKEN_TYPE_CLOSE_BRACKET)
+			{
+				if (!ParseToken(TOKEN_TYPE_OPEN_BRACKET))
+					return false;
+
+				if (!ParseToken(TOKEN_TYPE_CLOSE_BRACKET))
+					return false;
+
+				type = Type::GetSliceType(type);
+				continue;
+			}
+
+			std::vector<u64> arrayLengths = {};
+
+			while (m_Lexer->PeekToken().type == TOKEN_TYPE_OPEN_BRACKET)
+			{
+				if (m_Lexer->PeekTokenAtOffset(1).type == TOKEN_TYPE_CLOSE_BRACKET)
+					break;
+
+				if (!ParseToken(TOKEN_TYPE_OPEN_BRACKET))
+					return false;
+
+				const Token lengthToken = m_Lexer->PeekToken();
+				if (lengthToken.type == TOKEN_TYPE_INVALID)
+					return false;
+
+				if (lengthToken.type != TOKEN_TYPE_INTEGER)
+				{
+					m_Diagnostics->ReportError(lengthToken.span, m_Lexer->GetFile(), "Expected an integer array length, but got '{}'",
+					                           TokenTypeToCStr(lengthToken.type));
+					return false;
+				}
+
+				u64 arrayLength = 0;
+				if (!TryParseIntegerTokenLexeme(m_Lexer->GetFile(), lengthToken, &arrayLength))
+				{
+					m_Diagnostics->ReportError(lengthToken.span, m_Lexer->GetFile(), "Invalid array length literal");
+					return false;
+				}
+
+				m_Lexer->EatToken();
+
+				if (!ParseToken(TOKEN_TYPE_CLOSE_BRACKET))
+					return false;
+
+				arrayLengths.push_back(arrayLength);
+			}
+
+			for (i32 index = static_cast<i32>(arrayLengths.size()) - 1; index >= 0; index--)
+				type = Type::GetArrayType(type, arrayLengths[static_cast<usize>(index)]);
+		}
+
+		*outType = type;
 		return true;
 	}
 
-	static_assert(TOKEN_TYPE_COUNT == 68,
+	static_assert(TOKEN_TYPE_COUNT == 75,
 	              "If you add a new token type, make sure to update the parse rules table below IN PROPER ORDER otherwise all hell will break loose");
 
 	// Rows = token type, each row = {prefix, infix, precedence}.
@@ -1405,6 +1679,7 @@ namespace Wandelt
 	    /* FOR_KEYWORD          */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* BREAK_KEYWORD        */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* CONTINUE_KEYWORD     */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* NULL_KEYWORD         */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
 
 	    /* ENTRYPOINT_DIRECTIVE */ {nullptr, nullptr, PRECEDENCE_NONE},
 
@@ -1430,6 +1705,8 @@ namespace Wandelt
 
 	    /* OPEN_PAREN           */ {&Parser::ParseGroupExpression, &Parser::ParseCallExpression, PRECEDENCE_POSTFIX},
 	    /* CLOSE_PAREN          */ {nullptr, nullptr, PRECEDENCE_NONE},
+	    /* OPEN_BRACKET         */ {&Parser::ParseArrayLiteralExpression, &Parser::ParseIndexExpression, PRECEDENCE_POSTFIX},
+	    /* CLOSE_BRACKET        */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* OPEN_BRACE           */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* CLOSE_BRACE          */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* SEMICOLON            */ {nullptr, nullptr, PRECEDENCE_NONE},
@@ -1442,6 +1719,8 @@ namespace Wandelt
 	    /* SLASH                */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_MULTIPLICATIVE},
 	    /* GREATER              */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
 	    /* LESS                 */ {nullptr, &Parser::ParseBinaryExpression, PRECEDENCE_COMPARISON},
+	    /* AMPERSAND            */ {&Parser::ParseUnaryExpression, nullptr, PRECEDENCE_PREFIX},
+	    /* CARET                */ {nullptr, &Parser::ParseDerefExpression, PRECEDENCE_POSTFIX},
 	    /* SINGLE_QUOTE         */ {nullptr, nullptr, PRECEDENCE_NONE},
 	    /* DOUBLE_QUOTE         */ {nullptr, nullptr, PRECEDENCE_NONE},
 
@@ -1456,7 +1735,9 @@ namespace Wandelt
 	    /* SLASH_EQUAL          */ {nullptr, &Parser::ParseAssignmentExpression, PRECEDENCE_ASSIGNMENT},
 	    /* PLUS_PLUS            */ {&Parser::ParsePrefixIncDecExpression, &Parser::ParsePostfixIncDecExpression, PRECEDENCE_POSTFIX},
 	    /* MINUS_MINUS          */ {&Parser::ParsePrefixIncDecExpression, &Parser::ParsePostfixIncDecExpression, PRECEDENCE_POSTFIX},
+	    /* ELLIPSIS             */ {nullptr, nullptr, PRECEDENCE_NONE},
 
+	    /* INTRINSIC            */ {&Parser::ParseIntrinsicExpression, nullptr, PRECEDENCE_NONE},
 	    /* IDENTIFIER           */ {&Parser::ParseIdentifierExpression, nullptr, PRECEDENCE_NONE},
 	    /* INTEGER              */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},
 	    /* FLOAT                */ {&Parser::ParseConstantExpression, nullptr, PRECEDENCE_NONE},

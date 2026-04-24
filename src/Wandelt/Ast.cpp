@@ -55,8 +55,36 @@ namespace Wandelt
 		case EXPRESSION_TYPE_ASSIGNMENT:
 			return "AssignmentExpression";
 
+		case EXPRESSION_TYPE_ARRAY_LITERAL:
+			return "ArrayLiteralExpression";
+
+		case EXPRESSION_TYPE_INDEX:
+			return "IndexExpression";
+
+		case EXPRESSION_TYPE_INTRINSIC:
+			return "IntrinsicExpression";
+
 		case EXPRESSION_TYPE_COUNT:
 			ASSERT(false, "Invalid expression type!");
+			break;
+		}
+
+		UNREACHABLE();
+	}
+
+	const char* IntrinsicKindToCStr(IntrinsicKind kind)
+	{
+		switch (kind)
+		{
+		case INTRINSIC_KIND_INVALID:
+			ASSERT(false, "Invalid intrinsic kind!");
+			break;
+
+		case INTRINSIC_KIND_LEN:
+			return "$len";
+
+		case INTRINSIC_KIND_COUNT:
+			ASSERT(false, "Invalid intrinsic kind!");
 			break;
 		}
 
@@ -89,6 +117,9 @@ namespace Wandelt
 		case CONSTANT_KIND_STRING:
 			return "StringConstant";
 
+		case CONSTANT_KIND_NULL:
+			return "NullConstant";
+
 		case CONSTANT_KIND_COUNT:
 			ASSERT(false, "Invalid constant kind!");
 		}
@@ -107,6 +138,12 @@ namespace Wandelt
 		case UNARY_OPERATOR_NEGATE:
 			return "Negate";
 
+		case UNARY_OPERATOR_ADDRESS_OF:
+			return "AddressOf";
+
+		case UNARY_OPERATOR_DEREF:
+			return "Dereference";
+
 		case UNARY_OPERATOR_COUNT:
 			ASSERT(false, "Invalid unary operator!");
 		}
@@ -124,6 +161,12 @@ namespace Wandelt
 
 		case UNARY_OPERATOR_NEGATE:
 			return "-";
+
+		case UNARY_OPERATOR_ADDRESS_OF:
+			return "&";
+
+		case UNARY_OPERATOR_DEREF:
+			return "^";
 
 		case UNARY_OPERATOR_COUNT:
 			ASSERT(false, "Invalid unary operator!");

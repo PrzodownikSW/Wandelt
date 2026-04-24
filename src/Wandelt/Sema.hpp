@@ -59,10 +59,13 @@ namespace Wandelt
 		bool AnalyzeBinaryExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeGroupExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeIdentifierExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeIntrinsicExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCastExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeIncDecExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCallExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeAssignmentExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeArrayLiteralExpression(Expression* expr, Type* typeHint);
+		bool AnalyzeIndexExpression(Expression* expr, Type* typeHint);
 		bool AnalyzeCallArgument(Expression** argumentExpression, Declaration* parameterDecl);
 
 		bool ExpressionHasSideEffect(const Expression* expr);

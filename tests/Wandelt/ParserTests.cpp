@@ -202,6 +202,127 @@ namespace Wandelt
 		}
 	}
 
+	TEST(ArrayVariableDeclarationParsesTypeAndLiteral)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int[4] arr = [1, 2, 3, 4];", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(declaration->variable.name, "arr");
+
+		Type* elementType = nullptr;
+		if (!AssertArrayType(declaration->variable.type, 4u, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 4u))
+			return;
+		for (u64 i = 0; i < 4; i++)
+		{
+			if (!AssertIntegerConstant(declaration->variable.initializer->arrayLiteral.items[i], i + 1))
+				return;
+		}
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(PointerVariableDeclarationParsesTypeAndNullInitializer)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int^ ptr = null;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(declaration->variable.name, "ptr");
+
+		Type* pointeeType = nullptr;
+		if (!AssertPointerType(declaration->variable.type, &pointeeType))
+			return;
+		if (!AssertBuiltinType(pointeeType, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertNullConstant(declaration->variable.initializer))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(MultidimensionalArrayDeclarationParsesNestedTypeAndLiteral)
+	{
+		Diagnostics diag;
+		const char* source              = "int[2][4] matrix = [[1, 2, 3, 4], [5, 6, 7, 8]];";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(declaration->variable.name, "matrix");
+
+		Type* rowType = nullptr;
+		if (!AssertArrayType(declaration->variable.type, 2u, &rowType))
+			return;
+		Type* elementType = nullptr;
+		if (!AssertArrayType(rowType, 4u, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 2u))
+			return;
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer->arrayLiteral.items[0], 4u))
+			return;
+		if (!AssertIntegerConstant(declaration->variable.initializer->arrayLiteral.items[0]->arrayLiteral.items[0], 1u))
+			return;
+		if (!AssertIntegerConstant(declaration->variable.initializer->arrayLiteral.items[1]->arrayLiteral.items[3], 8u))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(SliceVariableDeclarationParsesTypeAndIdentifierInitializer)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int[] view = arr;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(declaration->variable.name, "view");
+
+		Type* elementType = nullptr;
+		if (!AssertSliceType(declaration->variable.type, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+		if (!AssertIdentifierExpression(declaration->variable.initializer, "arr"))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(ArrayLiteralFillSyntaxParses)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int[10] x = [1, 2, 3...];", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromTopLevelStatement(&translationUnit, 0);
+		if (!AssertArrayLiteralExpression(declaration->variable.initializer, 3u, true))
+			return;
+		if (!AssertIntegerConstant(declaration->variable.initializer->arrayLiteral.items[2], 3u))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
 	TEST(FunctionDeclarationParsesBlockStatements)
 	{
 		Diagnostics diag;
@@ -278,6 +399,39 @@ namespace Wandelt
 			return;
 		ASSERT_EQ(declaration->function.body->type, STATEMENT_TYPE_BLOCK);
 		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(FunctionDeclarationParsesSliceParameterAndLenIntrinsic)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn sz count(int[] values) { return $len(values); }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_STR_EQ(declaration->function.name, "count");
+		if (!AssertBuiltinType(declaration->function.returnType, BUILTIN_TYPE_SZ))
+			return;
+		ASSERT_EQ(declaration->function.parameters.Length(), 1u);
+
+		Declaration* parameter = declaration->function.parameters[0];
+		ASSERT_EQ(parameter->type, DECLARATION_TYPE_VARIABLE);
+		ASSERT_STR_EQ(parameter->variable.name, "values");
+		Type* elementType = nullptr;
+		if (!AssertSliceType(parameter->variable.type, &elementType))
+			return;
+		if (!AssertBuiltinType(elementType, BUILTIN_TYPE_INT))
+			return;
+
+		Statement* returnStatement = GetFunctionBodyStatement(declaration, 0);
+		ASSERT_EQ(returnStatement->type, STATEMENT_TYPE_RETURN);
+		if (!AssertIntrinsicExpression(returnStatement->returnStmt.expression, INTRINSIC_KIND_LEN, 1u))
+			return;
+		if (!AssertIdentifierExpression(returnStatement->returnStmt.expression->intrinsic.arguments[0], "values"))
+			return;
+
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -533,6 +687,23 @@ namespace Wandelt
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
+	TEST(AddressOfExpressionParses)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "int^ ptr = &value;", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_VARIABLE);
+		if (!AssertUnaryExpression(declaration->variable.initializer, UNARY_OPERATOR_ADDRESS_OF))
+			return;
+		if (!AssertIdentifierExpression(declaration->variable.initializer->unary.operand, "value"))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
 	TEST(BinaryExpressionHonorsArithmeticPrecedence)
 	{
 		Diagnostics diag;
@@ -686,6 +857,62 @@ namespace Wandelt
 			return;
 		if (!AssertIntegerConstant(expressionStatement->expression.expression->assignment.right, 1u))
 			return;
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(IndexAssignmentExpressionStatementParses)
+	{
+		Diagnostics diag;
+		const char* source              = "fn void main() { int[4] arr = [1, 2, 3, 4]; arr[0] = 9; }";
+		TranslationUnit translationUnit = ParseSource(alloc, source, &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 2u);
+
+		Statement* expressionStatement = declaration->function.body->block.statements[1];
+		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		if (!AssertAssignmentExpression(expressionStatement->expression.expression, ASSIGNMENT_OPERATOR_PURE))
+			return;
+
+		Expression* target = nullptr;
+		Expression* index  = nullptr;
+		if (!AssertIndexExpression(expressionStatement->expression.expression->assignment.left, &target, &index))
+			return;
+		if (!AssertIdentifierExpression(target, "arr"))
+			return;
+		if (!AssertIntegerConstant(index, 0u))
+			return;
+		if (!AssertIntegerConstant(expressionStatement->expression.expression->assignment.right, 9u))
+			return;
+
+		ASSERT_NO_DIAGNOSTICS(diag);
+	}
+
+	TEST(DerefAssignmentExpressionStatementParses)
+	{
+		Diagnostics diag;
+		TranslationUnit translationUnit = ParseSource(alloc, "fn void main() { ptr^ = value; }", &diag);
+
+		ASSERT_EQ(translationUnit.statements.Length(), 1u);
+
+		Declaration* declaration = GetDeclarationFromStatement(GetTopLevelStatement(&translationUnit, 0));
+		ASSERT_EQ(declaration->type, DECLARATION_TYPE_FUNCTION);
+		ASSERT_EQ(declaration->function.body->block.statements.Length(), 1u);
+
+		Statement* expressionStatement = declaration->function.body->block.statements[0];
+		ASSERT_EQ(expressionStatement->type, STATEMENT_TYPE_EXPRESSION);
+		if (!AssertAssignmentExpression(expressionStatement->expression.expression, ASSIGNMENT_OPERATOR_PURE))
+			return;
+		if (!AssertUnaryExpression(expressionStatement->expression.expression->assignment.left, UNARY_OPERATOR_DEREF, true))
+			return;
+		if (!AssertIdentifierExpression(expressionStatement->expression.expression->assignment.left->unary.operand, "ptr"))
+			return;
+		if (!AssertIdentifierExpression(expressionStatement->expression.expression->assignment.right, "value"))
+			return;
+
 		ASSERT_NO_DIAGNOSTICS(diag);
 	}
 
@@ -1643,9 +1870,15 @@ namespace Wandelt
 		RUN_TEST(VariableDeclarationParsesCharacterInitializer);
 		RUN_TEST(VariableDeclarationParsesStringInitializer);
 		RUN_TEST(VariableDeclarationsParseAllBuiltinTypes);
+		RUN_TEST(ArrayVariableDeclarationParsesTypeAndLiteral);
+		RUN_TEST(PointerVariableDeclarationParsesTypeAndNullInitializer);
+		RUN_TEST(SliceVariableDeclarationParsesTypeAndIdentifierInitializer);
+		RUN_TEST(MultidimensionalArrayDeclarationParsesNestedTypeAndLiteral);
+		RUN_TEST(ArrayLiteralFillSyntaxParses);
 		RUN_TEST(FunctionDeclarationParsesBlockStatements);
 		RUN_TEST(FunctionDeclarationParsesVoidReturnTypeAndEmptyBody);
 		RUN_TEST(FunctionDeclarationParsesParameters);
+		RUN_TEST(FunctionDeclarationParsesSliceParameterAndLenIntrinsic);
 		RUN_TEST(FunctionDeclarationParsesMultilineBodyWithComments);
 		RUN_TEST(TopLevelCallExpressionStatementParses);
 		RUN_TEST(CallExpressionStatementParsesInsideFunctionBody);
@@ -1658,6 +1891,7 @@ namespace Wandelt
 		RUN_TEST(CastExpressionParsesWithConstantOperand);
 		RUN_TEST(CastExpressionAppliesToCallResult);
 		RUN_TEST(UnaryExpressionParsesNegation);
+		RUN_TEST(AddressOfExpressionParses);
 		RUN_TEST(BinaryExpressionHonorsArithmeticPrecedence);
 		RUN_TEST(BinaryExpressionParsesLeftAssociatively);
 		RUN_TEST(GroupExpressionOverridesBinaryPrecedence);
@@ -1665,6 +1899,8 @@ namespace Wandelt
 		RUN_TEST(PostfixIncDecExpressionStatementParses);
 		RUN_TEST(AssignmentExpressionStatementParses);
 		RUN_TEST(CompoundAssignmentExpressionStatementParses);
+		RUN_TEST(IndexAssignmentExpressionStatementParses);
+		RUN_TEST(DerefAssignmentExpressionStatementParses);
 		RUN_TEST(AssignmentExpressionParsesRightAssociatively);
 		RUN_TEST(IfStatementParsesSimple);
 		RUN_TEST(IfStatementParsesThenBlockBody);

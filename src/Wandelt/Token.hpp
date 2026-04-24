@@ -21,6 +21,7 @@ namespace Wandelt
 		TOKEN_TYPE_FOR_KEYWORD,      // 'for'
 		TOKEN_TYPE_BREAK_KEYWORD,    // 'break'
 		TOKEN_TYPE_CONTINUE_KEYWORD, // 'continue'
+		TOKEN_TYPE_NULL_KEYWORD,     // 'null'
 
 		// Directives
 		TOKEN_TYPE_ENTRYPOINT_DIRECTIVE, // '#entrypoint'
@@ -47,22 +48,26 @@ namespace Wandelt
 		TOKEN_TYPE_RAWPTR_KEYWORD,  // 'rawptr'
 
 		// Single-character tokens
-		TOKEN_TYPE_OPEN_PAREN,   //  (
-		TOKEN_TYPE_CLOSE_PAREN,  //  )
-		TOKEN_TYPE_OPEN_BRACE,   //  {
-		TOKEN_TYPE_CLOSE_BRACE,  //  }
-		TOKEN_TYPE_SEMICOLON,    //  ;
-		TOKEN_TYPE_COMMA,        //  ,
-		TOKEN_TYPE_DOT,          //  .
-		TOKEN_TYPE_EQUALS,       //  =
-		TOKEN_TYPE_PLUS,         //  +
-		TOKEN_TYPE_MINUS,        //  -
-		TOKEN_TYPE_STAR,         //  *
-		TOKEN_TYPE_SLASH,        //  /
-		TOKEN_TYPE_GREATER,      //  >
-		TOKEN_TYPE_LESS,         //  <
-		TOKEN_TYPE_SINGLE_QUOTE, //  '
-		TOKEN_TYPE_DOUBLE_QUOTE, //  "
+		TOKEN_TYPE_OPEN_PAREN,    //  (
+		TOKEN_TYPE_CLOSE_PAREN,   //  )
+		TOKEN_TYPE_OPEN_BRACKET,  //  [
+		TOKEN_TYPE_CLOSE_BRACKET, // ]
+		TOKEN_TYPE_OPEN_BRACE,    //  {
+		TOKEN_TYPE_CLOSE_BRACE,   //  }
+		TOKEN_TYPE_SEMICOLON,     //  ;
+		TOKEN_TYPE_COMMA,         //  ,
+		TOKEN_TYPE_DOT,           //  .
+		TOKEN_TYPE_EQUALS,        //  =
+		TOKEN_TYPE_PLUS,          //  +
+		TOKEN_TYPE_MINUS,         //  -
+		TOKEN_TYPE_STAR,          //  *
+		TOKEN_TYPE_SLASH,         //  /
+		TOKEN_TYPE_GREATER,       //  >
+		TOKEN_TYPE_LESS,          //  <
+		TOKEN_TYPE_AMPERSAND,     //  &
+		TOKEN_TYPE_CARET,         //  ^
+		TOKEN_TYPE_SINGLE_QUOTE,  //  '
+		TOKEN_TYPE_DOUBLE_QUOTE,  //  "
 
 		// Double-character tokens
 		TOKEN_TYPE_BANG_BANG,     //  !!
@@ -76,6 +81,10 @@ namespace Wandelt
 		TOKEN_TYPE_SLASH_EQUAL,   //  /=
 		TOKEN_TYPE_PLUS_PLUS,     //  ++
 		TOKEN_TYPE_MINUS_MINUS,   //  --
+		TOKEN_TYPE_ELLIPSIS,      //  ...
+
+		// Intrinsic functions
+		TOKEN_TYPE_INTRINSIC,  // $len
 
 		// Literals
 		TOKEN_TYPE_IDENTIFIER, // ident

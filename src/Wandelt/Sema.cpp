@@ -2,10 +2,25 @@
 
 namespace Wandelt
 {
-	static bool IsVariableLValue(Expression* expr)
+	static bool IsAssignableLValue(Expression* expr)
 	{
-		return expr != nullptr && expr->type == EXPRESSION_TYPE_IDENTIFIER && expr->identifier.declarationRef != nullptr &&
-		       expr->identifier.declarationRef->type == DECLARATION_TYPE_VARIABLE;
+		ASSERT(expr != nullptr);
+
+		if (expr->type == EXPRESSION_TYPE_IDENTIFIER)
+			return expr->identifier.declarationRef != nullptr && expr->identifier.declarationRef->type == DECLARATION_TYPE_VARIABLE;
+
+		if (expr->type == EXPRESSION_TYPE_INDEX)
+			return IsAssignableLValue(expr->index.target);
+
+		if (expr->type == EXPRESSION_TYPE_UNARY && expr->unary.op == UNARY_OPERATOR_DEREF)
+			return true;
+
+		return false;
+	}
+
+	static bool IsPointerEqualityOperand(Type* type)
+	{
+		return type != nullptr && (type->IsPointerLike() || type->IsNullPtrType());
 	}
 
 	static bool TryResolveAbstractIntegerConstantToType(Expression* expr, Type* targetType)
@@ -573,6 +588,9 @@ namespace Wandelt
 		case EXPRESSION_TYPE_IDENTIFIER:
 			return AnalyzeIdentifierExpression(expr, typeHint);
 
+		case EXPRESSION_TYPE_INTRINSIC:
+			return AnalyzeIntrinsicExpression(expr, typeHint);
+
 		case EXPRESSION_TYPE_CALL:
 			return AnalyzeCallExpression(expr, typeHint);
 
@@ -584,6 +602,12 @@ namespace Wandelt
 
 		case EXPRESSION_TYPE_ASSIGNMENT:
 			return AnalyzeAssignmentExpression(expr, typeHint);
+
+		case EXPRESSION_TYPE_ARRAY_LITERAL:
+			return AnalyzeArrayLiteralExpression(expr, typeHint);
+
+		case EXPRESSION_TYPE_INDEX:
+			return AnalyzeIndexExpression(expr, typeHint);
 
 		case EXPRESSION_TYPE_COUNT:
 			ASSERT(false, "Invalid expression type!");
@@ -600,7 +624,7 @@ namespace Wandelt
 
 		if (expr->constant.kind == CONSTANT_KIND_INTEGER)
 		{
-			if (typeHint && typeHint->CanRepresentIntegerConstant(expr->constant.integerValue))
+			if (typeHint != nullptr && typeHint->CanRepresentIntegerConstant(expr->constant.integerValue))
 				resolvedType = typeHint;
 			else
 				resolvedType = Type::GetDefaultTypeForIntegerConstant(expr->constant.integerValue);
@@ -627,6 +651,13 @@ namespace Wandelt
 				resolvedType = typeHint;
 			else
 				resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_STRING);
+		}
+		else if (expr->constant.kind == CONSTANT_KIND_NULL)
+		{
+			if (typeHint != nullptr && typeHint->IsPointerLike())
+				resolvedType = typeHint;
+			else
+				resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_NULLPTR);
 		}
 		else
 		{
@@ -655,8 +686,26 @@ namespace Wandelt
 	bool Sema::AnalyzeUnaryExpression(Expression* expr, Type* typeHint)
 	{
 		Type* operandHint = nullptr;
-		if (typeHint != nullptr && typeHint->IsArithmetic())
-			operandHint = typeHint;
+		switch (expr->unary.op)
+		{
+		case UNARY_OPERATOR_NEGATE:
+			if (typeHint != nullptr && typeHint->IsArithmetic())
+				operandHint = typeHint;
+			break;
+
+		case UNARY_OPERATOR_ADDRESS_OF:
+			break;
+
+		case UNARY_OPERATOR_DEREF:
+			if (typeHint != nullptr)
+				operandHint = Type::GetPointerType(typeHint);
+			break;
+
+		case UNARY_OPERATOR_INVALID:
+		case UNARY_OPERATOR_COUNT:
+			ASSERT(false, "Unhandled unary operator: %i", expr->unary.op);
+			return false;
+		}
 
 		if (!AnalyzeExpression(expr->unary.operand, operandHint))
 			return false;
@@ -664,15 +713,49 @@ namespace Wandelt
 		Type* operandType = expr->unary.operand->resolvedType;
 		ASSERT(operandType != nullptr);
 
-		if (!operandType->IsArithmetic())
+		switch (expr->unary.op)
 		{
-			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Unary operator '{}' requires an arithmetic operand, got '{}'",
-			                           UnaryOperatorToTokenCStr(expr->unary.op), operandType->ToString());
+		case UNARY_OPERATOR_NEGATE:
+			if (!operandType->IsArithmetic())
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Unary operator '{}' requires an arithmetic operand, got '{}'",
+				                           UnaryOperatorToTokenCStr(expr->unary.op), operandType->ToString());
+				return false;
+			}
+
+			expr->resolvedType = operandType;
+			return true;
+
+		case UNARY_OPERATOR_ADDRESS_OF:
+			if (!IsAssignableLValue(expr->unary.operand))
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Unary operator '{}' requires an addressable operand",
+				                           UnaryOperatorToTokenCStr(expr->unary.op));
+				return false;
+			}
+
+			expr->resolvedType = Type::GetPointerType(operandType);
+			return true;
+
+		case UNARY_OPERATOR_DEREF:
+			if (!operandType->IsPointerType())
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Unary operator '{}' requires a typed pointer operand, got '{}'",
+				                           UnaryOperatorToTokenCStr(expr->unary.op), operandType->ToString());
+				return false;
+			}
+
+			expr->resolvedType = operandType->pointer.pointeeType;
+			return true;
+
+		case UNARY_OPERATOR_INVALID:
+		case UNARY_OPERATOR_COUNT:
+			ASSERT(false, "Unhandled unary operator: %i", expr->unary.op);
 			return false;
 		}
 
-		expr->resolvedType = operandType;
-		return true;
+		ASSERT(false, "Unhandled unary operator: %i", expr->unary.op);
+		return false;
 	}
 
 	bool Sema::AnalyzeBinaryExpression(Expression* expr, Type* typeHint)
@@ -742,6 +825,23 @@ namespace Wandelt
 			{
 				expr->resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
 				return true;
+			}
+
+			if (IsPointerEqualityOperand(leftType) && IsPointerEqualityOperand(rightType))
+			{
+				if (leftType->IsNullPtrType() && rightType->IsPointerLike())
+				{
+					expr->binary.left  = InjectCast(expr->binary.left, rightType);
+					expr->resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
+					return true;
+				}
+
+				if (rightType->IsNullPtrType() && leftType->IsPointerLike())
+				{
+					expr->binary.right = InjectCast(expr->binary.right, leftType);
+					expr->resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_BOOL);
+					return true;
+				}
 			}
 
 			if (!leftType->IsArithmetic() || !rightType->IsArithmetic())
@@ -844,6 +944,42 @@ namespace Wandelt
 		return true;
 	}
 
+	bool Sema::AnalyzeIntrinsicExpression(Expression* expr, Type* /*typeHint*/)
+	{
+		switch (expr->intrinsic.kind)
+		{
+		case INTRINSIC_KIND_LEN:
+			if (expr->intrinsic.arguments.Length() != 1)
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Intrinsic '{}' expects exactly 1 argument, got {}",
+				                           IntrinsicKindToCStr(expr->intrinsic.kind), expr->intrinsic.arguments.Length());
+				return false;
+			}
+
+			if (!AnalyzeExpression(expr->intrinsic.arguments[0], nullptr))
+				return false;
+
+			if (!expr->intrinsic.arguments[0]->resolvedType->IsArrayType() && !expr->intrinsic.arguments[0]->resolvedType->IsSliceType())
+			{
+				m_Diagnostics->ReportError(expr->intrinsic.arguments[0]->span, m_TranslationUnit->file,
+				                           "Intrinsic '{}' requires an array or slice argument, got '{}'", IntrinsicKindToCStr(expr->intrinsic.kind),
+				                           expr->intrinsic.arguments[0]->resolvedType->ToString());
+				return false;
+			}
+
+			expr->resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_SZ);
+			return true;
+
+		case INTRINSIC_KIND_INVALID:
+		case INTRINSIC_KIND_COUNT:
+			ASSERT(false, "Unhandled intrinsic kind: %i", expr->intrinsic.kind);
+			return false;
+		}
+
+		ASSERT(false, "Unhandled intrinsic kind: %i", expr->intrinsic.kind);
+		return false;
+	}
+
 	bool Sema::AnalyzeCastExpression(Expression* expr, Type* /*typeHint*/)
 	{
 		Type* target = expr->cast.targetType;
@@ -887,7 +1023,7 @@ namespace Wandelt
 		if (!AnalyzeExpression(expr->incdec.operand, nullptr))
 			return false;
 
-		if (!IsVariableLValue(expr->incdec.operand))
+		if (!IsAssignableLValue(expr->incdec.operand))
 		{
 			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Operator '{}' requires a variable operand",
 			                           expr->incdec.isIncrement ? "++" : "--");
@@ -1021,7 +1157,7 @@ namespace Wandelt
 		if (!AnalyzeExpression(expr->assignment.left, nullptr))
 			return false;
 
-		if (!IsVariableLValue(expr->assignment.left))
+		if (!IsAssignableLValue(expr->assignment.left))
 		{
 			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Left-hand side of assignment must be a variable");
 			return false;
@@ -1098,6 +1234,108 @@ namespace Wandelt
 			expr->assignment.right = InjectCast(expr->assignment.right, commonType);
 
 		expr->resolvedType = Type::GetBuiltinType(BUILTIN_TYPE_VOID);
+		return true;
+	}
+
+	bool Sema::AnalyzeArrayLiteralExpression(Expression* expr, Type* typeHint)
+	{
+		if (typeHint == nullptr || !typeHint->IsArrayType())
+		{
+			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Array literal requires an expected array type");
+			return false;
+		}
+
+		const u64 expectedLength = typeHint->array.length;
+		const u64 explicitCount  = expr->arrayLiteral.items.Length();
+
+		if (expr->arrayLiteral.repeatLastElement)
+		{
+			if (explicitCount == 0)
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Array fill syntax requires at least one explicit element");
+				return false;
+			}
+
+			if (explicitCount > expectedLength)
+			{
+				m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file,
+				                           "Array literal provides {} explicit elements for array type '{}' with length {}", explicitCount,
+				                           typeHint->ToString(), expectedLength);
+				return false;
+			}
+		}
+		else if (explicitCount != expectedLength)
+		{
+			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Array literal for type '{}' must initialize exactly {} elements, got {}",
+			                           typeHint->ToString(), expectedLength, explicitCount);
+			return false;
+		}
+
+		for (u64 i = 0; i < explicitCount; i++)
+		{
+			Expression* item = expr->arrayLiteral.items[i];
+			if (!AnalyzeExpression(item, typeHint->array.elementType))
+				return false;
+
+			if (item->resolvedType == typeHint->array.elementType)
+				continue;
+
+			if (!item->resolvedType->IsImplicitlyConvertibleTo(typeHint->array.elementType))
+			{
+				m_Diagnostics->ReportError(item->span, m_TranslationUnit->file, "Cannot implicitly cast array element {} from '{}' to '{}'", i,
+				                           item->resolvedType->ToString(), typeHint->array.elementType->ToString());
+				return false;
+			}
+
+			expr->arrayLiteral.items[i] = InjectCast(item, typeHint->array.elementType);
+		}
+
+		expr->resolvedType = typeHint;
+		return true;
+	}
+
+	bool Sema::AnalyzeIndexExpression(Expression* expr, Type* /*typeHint*/)
+	{
+		if (!AnalyzeExpression(expr->index.target, nullptr))
+			return false;
+
+		Type* targetType = expr->index.target->resolvedType;
+		ASSERT(targetType != nullptr);
+
+		if (!targetType->IsArrayType() && !targetType->IsSliceType())
+		{
+			m_Diagnostics->ReportError(expr->span, m_TranslationUnit->file, "Indexing requires an array or slice operand, got '{}'",
+			                           targetType->ToString());
+			return false;
+		}
+
+		Type* indexHint = Type::GetBuiltinType(BUILTIN_TYPE_SZ);
+		if (!AnalyzeExpression(expr->index.index, indexHint))
+			return false;
+
+		Type* indexType = expr->index.index->resolvedType;
+		ASSERT(indexType != nullptr);
+
+		if (!indexType->IsInteger())
+		{
+			m_Diagnostics->ReportError(expr->index.index->span, m_TranslationUnit->file, "Array index must be an integer, got '{}'",
+			                           indexType->ToString());
+			return false;
+		}
+
+		if (targetType->IsArrayType() && expr->index.index->type == EXPRESSION_TYPE_CONSTANT)
+		{
+			u64 indexValue = expr->index.index->constant.integerValue;
+			if (indexValue >= targetType->array.length)
+			{
+				m_Diagnostics->ReportError(expr->index.index->span, m_TranslationUnit->file,
+				                           "Array index {} is out of bounds for array type '{}' with length {}, valid indices are from 0 to {}",
+				                           indexValue, targetType->ToString(), targetType->array.length, targetType->array.length - 1);
+				return false;
+			}
+		}
+
+		expr->resolvedType = targetType->IsArrayType() ? targetType->array.elementType : targetType->slice.elementType;
 		return true;
 	}
 
@@ -1187,7 +1425,10 @@ namespace Wandelt
 		case EXPRESSION_TYPE_BINARY:
 		case EXPRESSION_TYPE_GROUP:
 		case EXPRESSION_TYPE_IDENTIFIER:
+		case EXPRESSION_TYPE_INTRINSIC:
 		case EXPRESSION_TYPE_CAST:
+		case EXPRESSION_TYPE_ARRAY_LITERAL:
+		case EXPRESSION_TYPE_INDEX:
 			return false;
 
 		case EXPRESSION_TYPE_COUNT:

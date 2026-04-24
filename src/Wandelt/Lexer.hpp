@@ -29,6 +29,7 @@ namespace Wandelt
 		void SkipWhitespace();
 		Token CreateNewToken(TokenType type);
 		Token LexIdentifierOrKeyword();
+		Token LexIntrinsic();
 		Token LexDigit(char firstChar);
 		Token LexCharacterLiteral();
 		Token LexStringLiteral();

@@ -236,6 +236,11 @@ namespace Wandelt
 				return CreateNewToken(TOKEN_TYPE_LONG_KEYWORD);
 			break;
 
+		case 'n':
+			if (ident == "null")
+				return CreateNewToken(TOKEN_TYPE_NULL_KEYWORD);
+			break;
+
 		case 'r':
 			if (ident == "return")
 				return CreateNewToken(TOKEN_TYPE_RETURN_KEYWORD);
@@ -291,6 +296,23 @@ namespace Wandelt
 		return CreateNewToken(TOKEN_TYPE_IDENTIFIER);
 	}
 
+	Token Lexer::LexIntrinsic()
+	{
+		if (!IsCharacterAnAlphanumeric(GetCurrentChar()))
+		{
+			Token error = CreateNewToken(TOKEN_TYPE_INVALID);
+			m_Diagnostics->ReportError(error.span, m_File, "Invalid intrinsic name, expected an identifier after '$'.");
+			return error;
+		}
+
+		while (IsCharacterAnAlphanumeric(GetCurrentChar()) || IsCharacterADigit(GetCurrentChar()))
+		{
+			Advance();
+		}
+
+		return CreateNewToken(TOKEN_TYPE_INTRINSIC);
+	}
+
 	Token Lexer::LexDigit(char firstChar)
 	{
 		// 12
@@ -307,7 +329,7 @@ namespace Wandelt
 		// 12.0f 12.0d
 		// 12.f  12.d
 		// .12f  .12d
-		if (GetCurrentChar() == '.')
+		if (GetCurrentChar() == '.' && !(GetNextChar() == '.'))
 		{
 			Advance(); // consume '.'
 
@@ -480,6 +502,14 @@ namespace Wandelt
 			token = CreateNewToken(TOKEN_TYPE_CLOSE_PAREN);
 			break;
 
+		case '[':
+			token = CreateNewToken(TOKEN_TYPE_OPEN_BRACKET);
+			break;
+
+		case ']':
+			token = CreateNewToken(TOKEN_TYPE_CLOSE_BRACKET);
+			break;
+
 		case '{':
 			token = CreateNewToken(TOKEN_TYPE_OPEN_BRACE);
 			break;
@@ -528,7 +558,13 @@ namespace Wandelt
 			break;
 
 		case '.':
-			if (IsCharacterADigit(GetCurrentChar()))
+			if (GetCurrentChar() == '.' && GetNextChar() == '.')
+			{
+				Advance();
+				Advance();
+				token = CreateNewToken(TOKEN_TYPE_ELLIPSIS);
+			}
+			else if (IsCharacterADigit(GetCurrentChar()))
 			{
 				// Handle floating-point literals that start with a dot, like .14f or .14d
 				m_CurrentChar--;
@@ -633,6 +669,17 @@ namespace Wandelt
 				token = CreateNewToken(TOKEN_TYPE_LESS);
 			}
 			break;
+
+		case '&':
+			token = CreateNewToken(TOKEN_TYPE_AMPERSAND);
+			break;
+
+		case '^':
+			token = CreateNewToken(TOKEN_TYPE_CARET);
+			break;
+
+		case '$':
+			return LexIntrinsic();
 
 		case '\'':
 			return LexCharacterLiteral();

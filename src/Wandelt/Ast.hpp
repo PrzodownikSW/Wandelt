@@ -35,6 +35,9 @@ namespace Wandelt
 		EXPRESSION_TYPE_INCDEC,
 		EXPRESSION_TYPE_CALL,
 		EXPRESSION_TYPE_ASSIGNMENT,
+		EXPRESSION_TYPE_ARRAY_LITERAL,
+		EXPRESSION_TYPE_INDEX,
+		EXPRESSION_TYPE_INTRINSIC,
 
 		EXPRESSION_TYPE_COUNT,
 	};
@@ -51,6 +54,7 @@ namespace Wandelt
 		CONSTANT_KIND_BOOLEAN,
 		CONSTANT_KIND_CHAR,
 		CONSTANT_KIND_STRING,
+		CONSTANT_KIND_NULL,
 
 		CONSTANT_KIND_COUNT,
 	};
@@ -75,7 +79,9 @@ namespace Wandelt
 	{
 		UNARY_OPERATOR_INVALID = 0,
 
-		UNARY_OPERATOR_NEGATE, // -x
+		UNARY_OPERATOR_NEGATE,     // -x
+		UNARY_OPERATOR_ADDRESS_OF, // &x
+		UNARY_OPERATOR_DEREF,      // x^
 
 		UNARY_OPERATOR_COUNT,
 	};
@@ -87,6 +93,7 @@ namespace Wandelt
 	{
 		UnaryOperator op;
 		struct Expression* operand;
+		bool isPostfix;
 	};
 
 	enum BinaryOperator
@@ -184,6 +191,35 @@ namespace Wandelt
 		struct Expression* right;
 	};
 
+	struct ArrayLiteralExpression
+	{
+		Vector<struct Expression*> items;
+		bool repeatLastElement;
+	};
+
+	struct IndexExpression
+	{
+		struct Expression* target;
+		struct Expression* index;
+	};
+
+	enum IntrinsicKind
+	{
+		INTRINSIC_KIND_INVALID = 0,
+		
+		INTRINSIC_KIND_LEN,
+
+		INTRINSIC_KIND_COUNT,
+	};
+
+	const char* IntrinsicKindToCStr(IntrinsicKind kind);
+
+	struct IntrinsicExpression
+	{
+		IntrinsicKind kind;
+		Vector<struct Expression*> arguments;
+	};
+
 	struct Expression
 	{
 		ExpressionType type;
@@ -202,6 +238,9 @@ namespace Wandelt
 			IncDecExpression incdec;
 			CallExpression call;
 			AssignmentExpression assignment;
+			ArrayLiteralExpression arrayLiteral;
+			IndexExpression index;
+			IntrinsicExpression intrinsic;
 		};
 	};
 

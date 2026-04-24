@@ -84,11 +84,15 @@ namespace Wandelt
 		Expression* ParseUnaryExpression();
 		Expression* ParseBinaryExpression(Expression* left);
 		Expression* ParseGroupExpression();
+		Expression* ParseArrayLiteralExpression();
 		Expression* ParseIdentifierExpression();
+		Expression* ParseIntrinsicExpression();
 		Expression* ParseCastExpression();
 		Expression* ParsePrefixIncDecExpression();
 		Expression* ParsePostfixIncDecExpression(Expression* left);
+		Expression* ParseDerefExpression(Expression* left);
 		Expression* ParseCallExpression(Expression* left);
+		Expression* ParseIndexExpression(Expression* left);
 		bool ParseCallArgument(CallExpression::Argument* outArgument, bool* outIsNamed);
 		Expression* ParseAssignmentExpression(Expression* left);
 
